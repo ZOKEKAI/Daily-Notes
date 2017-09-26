@@ -1,0 +1,34 @@
+1、git log	查看所有操作日志
+
+2、git log --author="ZOKEKAI"	查看某个用户相关的日志
+
+3、git diff	 只能查看在执行add操作之前的更改，详细列出更改前后的内容对比
+[还可查看最近删除的哪些文件，但不能查看增加了什么文件]
+
+4、git diff --staged/--cached	可以查看在add操作后，但未commit操作之前的所有改动
+
+5、git commit -am "修改描述"	相当于git add .和git commit -m的组合
+[前提是要提交的文件已被跟踪(即之前对其执行过add操作)，主要用于文件修改的提交，而不是文件添加时的提交]
+
+6、git checkout -- index.html
+[相当于将仓库中未修改的index.html文件复制出来，覆盖当前已经修改的index.html文件，将已修改的index.html文件恢复回未修改状态]
+
+7、$ git checkout c7f893 gg.txt		
+将gg.txt文件恢复到某个commit提交后的状态，c7f893c为commit一个提交的前7位值
+(完整值显示为：commit c7f893ccb3a0bd62bfde10cbb7f0286f545c24d7)
+
+8、将本地文件夹内容提交到远程的操作
+(1) 使用cd命令进入要同步到远程仓库的文件夹(例如BRM文件夹)
+(2) git remote add githubRepo 填写github远程仓库地址
+(3) git remote	显示远程仓库名称
+(4) git push -u githubRepo master	将本地该文件夹的所有文件提交到远程仓库
+	[githubRepo默认就是你新建的远程仓库名，master是分支名称(主分支)]
+	
+9、cherry-pick的用法
+如果你希望将提交 e43a6 拉取到 master 分支，你可以运行：
+$ git cherry-pick e43a6fd3e94888d76779ad79fb568ed180e5fcdf
+	Finished one cherry-pick.
+	[master]: created a0a41a9: "More friendly message when locking the index
+	fails."
+	3 files changed, 17 insertions(+), 3 deletions(-)
+这样会拉取和 e43a6 相同的更改，但是因为应用的日期不同，你会得到一个新的提交 SHA-1 值。

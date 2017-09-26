@@ -1,0 +1,73 @@
+1.首先新建一个Person接口(也就是一套规范和标准)，该接口定义了一个run和一个eat方法，实现这个接口的所有非抽象类必须实现这两个方法
+
+	public interface Person {
+		void run();
+		void eat();
+	}
+	
+2.新建一个Man类，让该类实现Person接口，该类由于不是抽象类，所以必须重写Person接口的所有未实现方法
+
+	public class Man implements Person {
+		@Override
+		public void run() {
+			System.out.println("男人大步走!!!");	//可以自定义该方法
+		}
+
+		@Override
+		public void eat() {
+			System.out.println("男人大口吃!!!");
+		}
+	}
+	
+3.新建一个Women类，让该类实现Person接口，该类由于不是抽象类，所以必须重写Person接口的所有未实现方法
+
+	public class Women implements Person{
+		@Override
+		public void run() {
+			System.out.println("女人小步走!!!");
+		}
+
+		@Override
+		public void eat() {
+			System.out.println("女人减肥不吃饭!!!");
+		}
+	}
+	
+4.新建一个超人类Superman，同样需要实现Person接口以及实现Person接口未实现的方法，其中2(Man类)和3(Women类)为被装饰类(被加强类)，而4(Superman类)为用来加强2和3的的作用
+
+	public class Superman implements Person {
+		
+		Person people;  (依赖倒置原则:依赖抽象而不依赖具体)	//定义一个默认的people对象，值为null，构造方法将会对其进行赋值，从而可以表示每一次被传进来的对象
+		//该构造方法用于接收传递进来的对象，并将当前的对象设置为传递进来的对象，传递进来的对象从而拥有了Superman类里面的所有方法
+		public Superman(Person people) {
+			super();
+			this.people = people;	//将当前的对象设置为传递进来的对象
+		}
+
+		@Override
+		public void run() {
+			System.out.println("超人会飞！！！");	
+		}
+
+		@Override
+		public void eat() {
+			people.eat();	//如果依旧想使用传递进来的对象的原来的eat方法，只需要使用people.eat()这种做法调用
+		}
+	}
+	
+5.最后定义一个用于测试的Client类
+
+	public class Client {
+		public static void main(String[] args) {
+			//此处使用Superman类的有参构造方法新建一个superman对象，并且把新建的Man对象作为参数传递到Superman类里面去
+			Superman superman = new Superman(new Man());
+			superman.run();	 //默认调用的run方法就是Superman里面的run方法
+			superman.eat();  //而此处调用的eat方法则为Man类里面的eat方法，原因是在Superman类里面该方法又进行了自定义，调用回了Man类里面的eat方法
+			
+			Superman superman2 = new Superman(new Women());	//Women的结果跟Man同理
+			superman2.run();
+			superman2.eat();
+		}
+	}
+	
+总结：主要思路就是先使用接口定义一个规范，然后再新建需要被装饰的对象，以及用于装饰其他对象的装饰者，使用装饰者新建一个对象，并且传入需要被装饰的对象，从而被装饰者拥有了装饰者的属性，从而达到装饰的目的。

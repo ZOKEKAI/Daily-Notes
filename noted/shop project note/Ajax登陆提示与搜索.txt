@@ -1,0 +1,78 @@
+1、登陆提示用户名是否可用
+
+--JSP部分，为输入框绑定事件当输入框失去焦点时触发该事件
+  传递过去的信息以json格式书写({"username":username})，result为web层传回来的信息
+	$("#name").blur(function(){
+		var username = this.value;	$.get("${pageContext.request.contextPath}/checkUserNameServlet",{"username":username},function(result){
+			$("span").html(result);
+		});
+	});
+	
+--CheckUserNameServlet.java部分，使用write方法将信息传给JSP页面
+	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+		response.setContentType("text/html;charset=utf-8");
+		String username = request.getParameter("username");
+		CheckUserService checkUserService = new CheckUserService();
+		try {
+			User user = checkUserService.checkUser(username);
+			if(user!=null){
+				response.getWriter().write("<font color='red'>此用户名已被占用！</font>");
+			}else {
+				response.getWriter().write("<font color='green'>此用户名可用^_^</font>");
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	
+2、搜索框实时显示搜索结果
+
+--JSP部分，$.getJSON可以接收json对象，$.get第四个参数如果不写json的话只能接收字符串，toString  返回的是字符串
+  (position: absolute; left: 401px;为设置结果提示框的显示位置，display: none表示默认不显示)
+	<center>
+		<input id="inputId" type="text" style="width: 500px; height: 38px;" />
+		<input type="button" style="height: 38px;" value="千百度" />
+		<div id="divId" style="width: 500px; border: 1px red solid; height: 300px;position: absolute; left: 401px; display: none ">
+			<table id="tabId" width="100%" height="100%">
+			</table>
+		</div>
+	</center>
+	
+	<script type="text/javascript">
+	$("#inputId").keyup(function(){
+		//清除上一次的结果，否则多次搜索后内容过长，顺序放在第一位
+		var $tabObj =  $("#tabId");
+ 		$tabObj.html("");
+		//获得输入框的内容
+		var key = this.value;
+ 		//如果输入的内容为空，则不执行任何操作
+ 		if(key==""){
+ 			$("#divId").hide();
+ 			return;
+ 		}				$.getJSON("${pageContext.request.contextPath}/searchKeyServlet",{"key":key},function(result){
+			$(result).each(function(i,n){
+					$("#divId").show();
+					$("#tabId").append("<font color='green'>"+n.word+"</font><br>");
+				});
+			});
+		});
+	</script>
+	
+--SearchKeyService.java
+	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+		response.setContentType("text/html;charset=utf-8");
+		String key = request.getParameter("key");
+		
+		SearchKeyService searchKeyService = new SearchKeyService();
+		try {
+			List<Words> list = searchKeyService.SearchKey(key);
+			JSONArray jsonArray = JSONArray.fromObject(list);
+			
+			*print方法的参数可以是字符串也可以是对象，底层会自动转为String*
+			*write方法的参数不能传对象，只能手动转换为String类型，能否解析json对象还要看JSP是否用的getJSON方法*
+			response.getWriter().print(jsonArray.toString());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}

@@ -1,0 +1,50 @@
+简介：通过获取Java编译后产生的字节码(class格式)文件，使用Java的反射机制从而获取得到该类的所有属性、方法，以达到设置该类的属性以及调用该类的方法的目的。
+
+1.获取字节码文件的3种方式
+(1)通过全类名获取字节码对象(在eclipse代码编写区内找到类名，鼠标左键点击该类名，然后右键选择"Copy Qualified Name")
+    Class clazz1 = Class.forName("cn.itcast.reflect17.Cat");
+(2)通过类.class直接得到
+    Class clazz2 = Cat.class;
+(3)通过该类的对象.getClass()方法获得
+    Class clazz3 = new Cat().getClass();
+    
+2.获取属性的方式
+(1)获取该类以及其父类的所有公共(public)属性对象
+    Field[] fields = catClass.getFields();
+(2)获得该类的所有属性（包括公有和私有）对象，但是不包括父类的任何属性对象
+    Field[] declaredFields = catClass.getDeclaredFields();
+(3)获取该类或者父类中名字为sex的一个公共(public)属性对象，如果两个类都有则优先获取本类的sex
+    Field field = catClass.getField("sex");
+(4)获取该类中名字为name的一个属性对象，无论公有还是私有都可以获取到
+    Field declaredfield = catClass.getDeclaredField("name");
+(5)要设置类中的私有变量的值，必须先设置其权限，该方式称为暴力反射
+    Field nameField = catClass.getDeclaredField("name");
+    nameField.setAccessible(true);  //暴力反射
+    nameField.set(cat, "kitty");    //设置一个属性的值
+    Object object = nameField.get(cat);     //获取cat对象当中名字叫做name的属性的值
+    
+3.获取方法的方式
+(1)获取该类以及其父类的所有公共(public)方法对象
+    Method[] methods = catClass.getMethods();
+(2)获得该类的所有方法（包括公有和私有）对象，但是不包括父类的任何方法对象
+    Method[] declaredMethods = catClass.getDeclaredMethods();
+(3)获取该类或者父类中名字为methodName的一个公共(public)属性对象，如果两个类都有则优先获取本类的methodName
+    Method method = catClass.getMethod("methodName");
+(4)获取该类中名字为methodName的一个属性对象，无论公有还是私有都可以获取到
+    Method declaredMethod = catClass.getDeclaredMethod("methodName");
+(5)有参和无参方法的获取
+    Method eatMethod = catClass.getMethod("eat", String.class);     //获取该类中一个名字为eat参数为String类型的方法
+    Method sleepMethod = catClass.getMethod("sleep");   //获取该类中一个名字为sleep无参的方法
+(6)方法的调用
+    eatMethod.invoke(cat, "芝麻");    //调用cat对象的eat方法，并将String类型的参数"芝麻"传入进去
+    sleepMethod.invoke(cat);        //调用cat对象的sleep方法，不传任何参数
+(7)获取与使用构造方法
+    Constructor[] constructors = catClass.getConstructors();    //获取所有的构造方法
+    Constructor constructor = catClass.getConstructor(String.class,String.class);   //获取有参构造方法
+    Object newInstance1 = constructor.newInstance();    //使用无参构造方法实例化一个对象
+    Object newInstance2 = constructor.newInstance("kittttty","female");     //使用有参构造方法实例化一个对象
+    Object cat2 = catClass.getConstructor(String.class,String.class).newInstance("kitttty","female");   //也可以像这样一步完成
+    
+4.获取变量的修饰符
+    int modifiers = field.getModifiers();
+    1表示public，2表示private，4表示protected，8表示static，10表示final

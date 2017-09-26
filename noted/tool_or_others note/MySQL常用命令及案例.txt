@@ -1,0 +1,322 @@
+1.创建数据库：create database 数据库名 [character set 字符集][collate  校对规则];
+	**中括号后面的内容不是必须的**
+	create database day08_3 character set gbk collate gbk_chinese_ci;
+	修改day08_2的字符集为utf-8
+	alter database day08_2 character set utf-8;
+
+2.设置数据库编码：create database 数据库名 character set 字符集;
+
+3.查看数据库MySQL服务器中的所有的数据库: show databases;
+
+4.查看某个数据库的各种信息: show create database 数据库名;
+  查看employee的建表语句：show create table employee;
+
+5.删除数据库：drop database 数据库名称;
+
+6.切换数据库：use 数据库名;
+
+7.查看正在使用的数据库: select database();
+
+8.创建表：
+	create table 表名(
+	   字段名 类型(长度) 约束,
+	   字段名 类型(长度) 约束
+	);
+	create table sort (
+	  sid int primary key auto_increment, #分类ID   (该键为主键，并且长度会自动增长，切记如果不是最后一行要加上逗号)
+	  sname VARCHAR(100) #分类名称
+	);
+	
+	+ 时间类型:
+  ​	date: yyyy-MM-dd;   datetime:日期和时间 yyyy-MM-dd  HH:mm:ss; timeStamp:  时间戳
+	
+9.删除主键：alter table 表名 drop primary key;
+  删除数据库某一行：delete from user where id = 1;
+
+10.删除一个表：drop table 表名;  (alter table 表名 drop 列名;)删除一个列
+
+11.查看数据库中的所有表：show tables;
+
+12.查看表结构：desc 表名;
+
+13.修改表结构格式(添加一列)：alter table 表名 add 列名 类型(长度) 约束;	
+
+14.修改表修改列的类型长度及约束：alter table 表名 modify 列名 类型(长度) 约束; 
+	alter table sort modify sname varchar(50) not null;
+
+15.修改表修改列名：alter table 表名 change 旧列名 新列名 类型(长度) 约束;
+注意：不能将原本含有null值的列的约束改为not null；如下所示，名字可以改但约束不对：
+alter table lam change ext extra2 varchar(10) not null;
+
+16.修改表名：rename table 表名 to 新表名; 
+
+17.修改表的字符集：alter table 表名 character set 字符集;
+
+18.向表中的列插入数据语法：
+	- 如果插入空值，请使用null
+	- 插入的日期和字符串，使用单引号括起来。
+	insert into 表 (列名1,列名2,列名3..) values(值1,值2,值3..);  (向表中插入某些列，不需要加上主键列)
+	insert into 表 values(主键列值,值1,值2,值3..);  (向表中插入所有列，切记用这种方式要加上主键列)
+
+19.将指定的sname字段中的值 修改成 日用品
+	update sort set sname='日用品';
+	--将sid为s002的记录中的sname改成 日用品
+	update sort set sname='日用品' where sid='s002';
+	--将名字为王安全和黄海波的type改成4
+	update star set type=4 where name='王安全' or name='黄海波';
+	--将龙太子的价格在原价格的基础上增加2000
+	update star set price=price+2000 where name='房祖名';
+	--统计每个学生的总分。
+    select *,chinese+math+english from exam;
+	--查询总分大于200分的所有同学
+	select * from exam where chinese+math+english>200;
+	--求班级最高分和最低分（数值范围在统计中特别有用）
+	select max(ifnull(chinese,0)+ifnull(math,0)+ifnull(english,0)) from exam;
+	select min(ifnull(chinese,0)+ifnull(math,0)+ifnull(english,0)) from exam;
+
+20.删除表： delete from 表名 [where 条件]   或者   truncate table 表名;		
+	delete：一条一条删除，如果没加条件相当于将表中的数据全部删除，不清空auto_increment记录数，表结构还在;删除后的数据可以找回
+	truncate：直接将表删除，重新创建一张一模一样的空表(速度快！)，auto_increment将置为零，从新开始。
+
+21.查询表中所有字段： select * from 表名; 
+	select 字段1,字段2,...from 表名;
+	例如：
+	select id,name from zhangwu;  （查询id和name这两列的数据）
+
+22.去除重复字段：	
+	distinct用于去除重复记录
+	select distinct 字段 from 表名;			
+	例如：
+	select distinct money from zhangwu;	 (去除money这一列中的重复数据并显示出来)
+	select distinct age,name from star;  (表示去掉所有行里面年龄和name都相同的行，并将age和name这两列打印出来)
+
+23.	**where和having的区别**
+	(1) having是在**分组后**对数据进行过滤.where是在**分组前**对数据进行过滤
+	(2) having后面可以使用聚合函数(统计函数)where后面不可以使用聚合函数
+	(3) having后面加的条件一定要与分组有关。(不明白也没关系)
+
+24.表别名：	(暂时修改表名)
+	select 字段名 as 别名 from 表名;     其中as可以省略
+	select name as nam from star;
+
+25.列运算：
+	select zname,zmoney+1000 as 'sum' from zhangwu;
+
+26.查询所有的吃饭支出
+select * from zhangwu where zname='吃饭支出';
+
+27.查询金额大于1000的所有数据
+select * from zhangwu where zmoney>1000;
+
+28.查询金额在2000到5000之间 
+select * from zhangwu where zmoney >= 2000 and zmoney <= 5000;
+	改造成between and 方式
+	select * from zhangwu where zmoney between 2000 and 5000;
+	between...and...: 包含临界值 eg: between 3000 and 6000相当于: 3000<=price<=6000
+
+29.查询金额是 1000,3500,5000 其中一个
+select * from zhangwu where zmoney = 1000 or zmoney=3500 or zmoney=5000;
+	改造成in方式
+	select * from zhangwu where zmoney  in (1000,3500,5000);
+
+
+30.模糊查询,like和通配符一起使用:
+	select * from zhangwu where zname like '%支出%';
+	select * from star where name like('周%');
+​	占位符:	% : 多位（0~n）
+​			_ : 一位
+
+
+31.查询账务名字,五个字符的
+select * from zhangwu where zname like'_____';
+
+32.查询账务名,不为空的
+select * from zhangwu where zname is not null;
+select * from zhangwu where not ( zname IS NULL);
+
+33.聚合函数 （聚合函数的前面不能有字段名,如果一定要有，那么该字段名只能是用来分组的字段名）
+
+**聚合函数不能写在where条件中**
+
+> 聚合函数是用来做纵向运算的函数
+
+​	count(*|字段)；统计指定列不为NULL的记录行数,一般用来统计表中的总数据数
+
+​	如果要统计表中的总记录数，那么count( *|不能为空的字段名)
+
+​	sum();计算指定列的数值和，如果指定列类型不是数值类型，那么计算结果为0
+
+​	max();计算指定列的最大值，如果指定列是字符串类型，那么使用字符串排序运算 
+
+​	min()；计算指定列的最小值，如果指定列是字符串类型，那么使用字符串排序运算
+
+​	avg();计算指定列的平均值，如果指定列类型不是数值类型，那么计算结果为0
+
+34.查找所有明星的记录,按照价格升序
+	select * from star order by price asc;	(切记没有where)
+- 查找所有明星的记录,按照价格升序,如果价格一样,按照年龄降序
+	select * from star order by price asc,age desc;			
+	
+- 统计star表中的总数据量，因为count()函数统计的是不为空的数据
+	select count(*) from star;
+	
+- 求明星价格的总和
+	select sum(price) from star;
+	
+- 查询身价最高的明星
+	select max(price) from star;
+
+-查询明星的平均价格
+select avg(price) from star;
+
+**如果有分组，select后面加的第一个字段名一定是用来分组的字段名**
+select type,group_concat(name,age,sex) from star group by type;
+
+-统计每一组的数据出现次数的总和，count(*)这一列的值代表type这一列中每个相同数据出现次数的统计 
+select type,count(*) from star group by type;
+
+-统计每一组的相同数据的价格总和，sum(price)这一列的值代表age这一列中所有年龄相同的人的身价总和
+select age,sum(price) from star group by age;
+
+-在各个价格相同的组中，挑选出年龄最小的数据
+select price,min(age) from star group by price;
+
+-根据明星类别分组，统计不同明星类别的个数,并且该明星类别数量大于2并且年龄大于30的才查询出来
+select type,count(*) from star where age>30 group by type having count(*)>2;
+
+------------------------------------------------------------------------------------------------
+
+多表操作:
+-- 使用type作为外键，指向category表中的cid
+ALTER TABLE star ADD constraint fk_star FOREIGN KEY(TYPE) REFERENCES category(cid);
+
+-- 删除外键
+alter table star drop constrain fk_star; 
+
+-- 结合两张表一起来查询
+SELECT * FROM star,category;
+
+-- 筛选正确数据
+SELECT * FROM star,category WHERE star.type=category.cid;
+
+-- 给隐式内连接查询加上一个别名
+SELECT * FROM star s,category c WHERE s.type=c.cid;
+
+-- 显示内连接查询,inner可以省略
+SELECT * FROM star s INNER JOIN category c ON s.type=c.cid;
+
+-- 使用左外链接查询,显示主表的所有数据	
+//打印出左边star表的所有内容，左边star表不符合的内容用null显示，打印右边表格category符合条件的内容
+SELECT * FROM star s LEFT OUTER JOIN category c ON s.type=c.cid;
+
+-- 使用右外连接查询，显示主表的所有数据
+//打印右边category表的所有内容，右边category表不符合的内容用null显示，打印左边表格category符合条件的内容
+SELECT * FROM star s RIGHT OUTER JOIN category c ON s.type=c.cid;
+
+-- 使用子查询，查出身价最高的明星的信息
+SELECT * FROM star WHERE price=(SELECT MAX(price) FROM star);	//后面小括号返回的是最高的price值
+
+-- 使用子查询查询价格高于IPhone8的商品信息
+ SELECT * FROM product WHERE price>(SELECT price FROM product WHERE pname='IPhone8')
+ 
+-- 查询和农夫山泉是同一类别的商品信息且不能包含农夫山泉
+SELECT * FROM product WHERE TYPE=(SELECT TYPE FROM product WHERE pname='农夫山泉') AND pname <> '农夫山泉'
+  
+-- 查询类别是手机数码的所有商品信息		//前提是product里面的type为category2表的外键
+SELECT * FROM product WHERE TYPE=(SELECT cid FROM category2 WHERE cname='手机数码')
+  
+  
+-- 联合查询
+CREATE TABLE A(
+	NAME VARCHAR(10),
+	score INT
+)
+CREATE TABLE B(
+	NAME VARCHAR(10),
+	score INT
+)
+//一次性插入多组数据
+INSERT INTO A VALUES('a',10),('b',20),('c',30);
+INSERT INTO B VALUES('a',10),('b',20),('d',40);
+
+-- 联合查询，将两个SQL语句查询出来的结果集进行合并
+SELECT * FROM a UNION SELECT * FROM b		//去重排序出来
+SELECT * FROM a UNION ALL SELECT * FROM b	//全部显示，不去重
+
+-- 分页查询，limit a,b,a表示从第几条数据开始查询，b表示每页的数据条数。如果客户端给咱们这样传数据，那我就开心啦。
+-- 客户端只会传给服务器，页数和每页的数据条数
+-- 如果客户端传过来 1,3表示，客户端需要第一页的数据，每页3条数据
+-- 服务器拿到页数和每页的数据条数之后，要将页数转换成从第几条数据开始
+SELECT * FROM star LIMIT 0,3
+
+-- 客户端给你传2,3
+SELECT * FROM star LIMIT 3,3
+
+-- 客户端给你传3,3
+SELECT * FROM star LIMIT 6,3
+
+-- 总结一个公式，将客户端传过来的页数page  转换成limit a,b中的a
+-- a=(page-1)*b
+
+-- 使用分页查询，查询出来身价最高的明星信息
+   -- 先按照=身价由高到低排序，然后使用分页查询查询出第一条数据
+   SELECT * FROM star ORDER BY price DESC LIMIT 0,1
+   
+----------------------------------------------------------------------------------------------------------------
+
+多表练习：
+
+--新建一个day09_exercise的数据库
+	create database day09_exercise;
+	use day09_exercise;
+
+-- 新建一个用户表(user) 
+   create table user(                                  
+          id int auto_increment primary key,                
+          username varchar(50)                                                
+        );
+
+-- 新建一个订单表(orders)
+   create table orders(                                                  
+          id int  auto_increment primary key,                                  
+          price double,                                           
+          user_id int                                       
+        );
+-- 给订单表添加外键约束
+alter table orders add constraint user_fk foreign key (user_id) references user(id); 
+
+-- 向user表中添加数据
+		insert into user values(3,'张三'),(4,'李四'),(5,'王五'),(6,'赵六');
+
+-- 向orders 表中插入数据
+		insert into orders values(1,1314,3),(2,1314,3),(3,15,4),(4,315,5),(5,1014,null);
+
+练习:
+--查询用户的订单,没有订单的用户不显示
+	select * from user,orders where user.id=orders.user_id;
+	或者select * from user join orders on user.id=orders.user_id;
+	
+--查询所有用户的订单详情
+	select * from user left join orders on user.id=orders.user_id;
+	
+--查询所有订单的用户详情
+	select * from user right join orders on user.id=orders.user_id;
+
+
+
+练习:
+--查看用户为张三的订单详情
+	答案:select * from orders where user_id = (select id from user where username = "张三");
+	
+--查询出订单的价格大于300的所有用户信息。
+	答案:select * from user where id in (select user_id from orders where price>300);	//注意in后面有空格
+	
+--查询订单价格大于300的订单信息及相关用户的信息。
+	SELECT * from user,orders where user.id=orders.user_id and orders.price > 300;
+	
+补充：
+顺序：where，group by，having，order by
+	where是筛选的条件
+    group by是用于分组的，可以对查询结果进行分组或对制定表的制定列进行分组。
+    having是对分组进行筛选，必须放在group by 之后
+    order by 用于对查询结果进行排序，自然要放在查询语句的后面，若不是对查询结果进行排序，而是直接对表中的某些列分组，则可以直接order by 后面跟要排序的列即可。

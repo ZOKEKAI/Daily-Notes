@@ -1,0 +1,102 @@
+1、配置电脑全局Maven环境
+解压apache-maven-3.3.9-bin.zip，将bin目录配置到环境变量的path里面去
+
+2、配置本地仓库
+(1)解压本地仓库压缩包到不带空格和中文的文件夹
+(2)将本地仓库的文件夹路径复制到maven安装目录-->conf-->settings.xml里面，添加如下配置：
+	<localRepository>C:\MavenRepository</localRepository>
+	
+3、eclipse上配置maven
+(1)Window --> Preferences --> Maven --> Installations --> 添加解压好的Maven程序
+(2)点击侧边栏的User Settings --> 在User Settings处选择：C:\maven\conf\settings.xml
+(3)Window --> Show View --> Maven Repositories视图，展开Local Repositories，点击Local Repository，右键新建索引
+
+4、新建一个Maven_Servlet工程
+(1)第一步记得勾上Create a simple product
+(2)Group Id : com.itcast
+(3)Artifact Id : 项目名称
+(4)Maven项目可以继承
+(5)打开problems视图
+(6)右键JavaEE Tools --> Generate Deployment新建web.xml文件，解决报错问题
+(7)打开pom.xml文件添加如下配置指定编译器以及修改JDK版本：
+	<build>
+	  	<plugins>
+			<!-- 设置编译器 -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.6.2</version>
+				<configuration>
+					<source>1.8</source>
+					<target>1.8</target>
+					<encoding>UTF-8</encoding>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+ 修改完成后右键更新一下项目
+(8)新建一个包，在里面新建一个Servlet，会发生报错，原因是缺少jar包，需要在pom文件添加如下依赖：
+	//也可以右键 Maven --> add dependency，但是要指定 <scope>provided</scope>
+	<dependencies>
+		<!-- Servlet依赖 -->
+		<dependency>
+			<groupId>javax.servlet</groupId>
+			<artifactId>servlet-api</artifactId>
+			<version>2.5</version>
+			<scope>provided</scope>
+		</dependency>
+		<!-- JSP依赖 -->
+		<dependency>
+			<groupId>javax.servlet</groupId>
+			<artifactId>jsp-api</artifactId>
+			<version>2.0</version>
+			<scope>provided</scope>
+		</dependency>
+	</dependencies>
+(9)解决使用tomcat:run运行maven项目时出错方法
+Window --> Show View --> Java --> 展开Installed JRES --> Execution Environments -->选择JRE版本，勾上最右边的勾
+
+特别注意：
+	<1>新建Test类时类名必须以Test结尾，需要导jar包时要在pom文件中添加依赖
+	<2>导入servlet-api-xxx.jar,jsp-api-xx.jar依赖范围一定选择：provided
+	(如果设置为compile,由于项目本身有servlet-api.jar,tomcat目录下也有这个jar包，最终会出现jar包冲突问题)
+	
+	
+5、使用Maven创建Struts项目
+
+(1)新建简单项目
+(2)生成web.xml文件
+(3)修改JDK以及编译器(如果需要)
+(4)引入struts坐标以及JSP坐标(记得时常更新以下项目)
+(5)在web.xml配置struts过滤器，最好将原来的/*改为*.action，切记没有/
+(6)书写struts.xml文件配置
+(7)新建一个action类
+
+6、配置全局JDK
+ 在{Maven_home}\conf\settings.xml文件中添加以下内容。添加在<profiles>节点中。具体版本请根据自己电脑上安装的JDK版本来设置：
+	<profile>  
+		<id>jdk1.8</id>  
+		<activation>  
+			<activeByDefault>true</activeByDefault>  
+			<jdk>1.8</jdk>  
+		</activation>  
+		<properties>  
+			<maven.compiler.source>1.8</maven.compiler.source>  
+			<maven.compiler.target>1.8</maven.compiler.target>  
+			<maven.compiler.compilerVersion>1.8</maven.compiler.compilerVersion>  
+		</properties>   
+	</profile>
+	
+	接下来要激活该配置，在<settings>节点里面添加如下代码：
+	<activeProfiles>
+      <!-- 要激活的模版id -->
+  	  <activeProfile>jdk1.8</activeProfile>
+    </activeProfiles>
+	
+7、配置阿里云代理，在{Maven_home}\conf\settings.xml文件中添加以下内容。添加在<mirrors>节点中:
+	<mirror>
+		<!--This sends everything else to /public -->
+		<id>nexus</id>
+		<mirrorOf>*</mirrorOf> 
+		<url>http://maven.aliyun.com/nexus/content/groups/public/</url>
+	</mirror>

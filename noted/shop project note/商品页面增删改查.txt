@@ -1,0 +1,42 @@
+ProductServlet:
+
+1、务必记得处理页面乱码问题：request.setCharacterEncoding("utf-8")
+2、${pageContext.request.contextPath}和request.contextPath()返回的是当前项目路径，例如你的项目名字是web22，则返回的结果是/web22(其中/代表http://localhost:8080，而web22就是你的项目名)
+不同之处：
+ (1)在Servlet中获取项目路径的方法为：request.getContextPath()，外面不用双引号，后面再拼接字符串路径
+ (2)在jsp页面中获取项目路径的方法为：${pageContext.request.contextPath }，且写在双引号里面
+3、"showAll".equals(method)中的"showAll"放在前面，避免出现空指针异常
+4、Servlet里面的doGet方法里面调用其他方法时切记将request和response对象传过去，否则要调用的   方法没有这些属性，因为doGet方法是request和response对象的入口
+5、使用BeanUtils框架需要导入commons-beanutils-1.8.3.jar和commons-logging-1.1.1.jar
+	Map<String, String[]> parameterMap = request.getParameterMap();
+	Product product = new Product();
+	BeanUtils.populate(product, parameterMap);
+	添加随机生成的id
+	product.setPid(UUID.randomUUID().toString());
+	添加当前时间
+	product.setPdate(new Date());
+
+---------------------------------------------------------------------------------------------------------------------------
+
+AddProduct.jsp
+
+1、在添加商品的页面使用的时post提交方式，由于post表单提交数据时不能和get一样在网址上传递要调用setvlet里面的哪个方法，所以需要另外添加一段信息，但是这段信息不能显示在页面上，会影响页面效果，可以使用隐藏字段：
+<input type="hidden" name="method" value="addProduct"/>
+
+---------------------------------------------------------------------------------------------------------------------------
+
+Product_list.jsp
+
+1、onclick里面的${p.pid}要用单引号引起来onclick="deleteByID('${p.pid}')"，否则取不到值
+2、delete为保留字，不能用来作为点击事件时触发的方法名，一般写出来红色加粗的字体需要留意是否是保留字
+3、location.href和超链接一样的效果，可以携带参数过去，例如：
+   window.location.href="${pageContext.request.contextPath}/productServlet?method=deleteByID&pid=${p.pid}";
+4、如果只是简单使用el不需要导入jstl.jar和standard.jar
+5、var result = window.confirm("您确认要删除该商品吗？");在页面弹出确认提示框
+
+---------------------------------------------------------------------------------------------------------------------------
+
+其他：
+
+1、要在方法体里面new出dao层对象，否则可能会有问题
+2、底层的错误可以往上抛，然后在Servlet层处理错误

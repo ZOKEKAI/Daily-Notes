@@ -1,0 +1,114 @@
+1、由于bos项目的crm部分需要模拟在与其他部分在不同的服务器，不同的地区中，所以需要使用到WebService技术，主项目通过saop协议调用crm部分功能以完成整个项目的正常运行。
+(1)作为一个独立的crm项目，首先需要自己的数据库部分，所以先新建一个oracle数据库用户，用于维护crm部分的表数据，该数据库只有一张T_CUSTOMER表，但是表里有一个String类型的外键fixedAreaId，该外键只能称为逻辑外键。
+新建的oracle普通用户拥有unlimited tablespace、connect以及resource权限。
+(2)crm作为一个要发布的WebService服务，新建项目时打包方式为war，并且继承common_parent这个父工程，使用同一套jar。
+(3)crm工程新建好后配置web.xml文件，配置如下：
+	<!--
+		因为之前写的cxf-server项目没有使用Spring框架的监听器,
+		所以加载applicationContext.xml文件时,需要在Servlet节点中添加<init-param>节点指定配置文件
+		本项目使用了监听器,所以使用<context-param>节点指定配置文件
+	-->
+	<context-param>
+		<param-name>contextConfigLocation</param-name>
+		<param-value>classpath:applicationContext.xml</param-value>
+	</context-param>
+	<listener>
+		<listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+	</listener>
+	<servlet>
+		<servlet-name>cxf</servlet-name>
+		<servlet-class>org.apache.cxf.transport.servlet.CXFServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>cxf</servlet-name>
+		<url-pattern>/webservice/*</url-pattern>
+	</servlet-mapping>
+(4)将applicationContext.xml和log4j.properties文件复制进入crm的resource文件夹里，并根据实际项目需求修改
+(5)创建实体类Customer，并使用jpa注解创建实体与数据库表的关系
+(6)创建新的tomcat-server，并修改server服务的三个端口号，防止与原tomcat的server端口冲突。
+(7)启动服务以完成自动建表操作，向新建的表插入测试数据。
+
+2、以上只是搭建好了最基本的WebService服务环境，接下来需要根据我们的需求创建业务功能
+(1)由于该crm服务只作为被调用的功能模块，不需要创建web层，只需要创建service、dao以及domain层即可。
+(2)这三个层只需要在service层的接口打上@WebService注解即可，serviceImpl和dao层和之前一样的写法。
+(3)在applicationContext.xml里面注册WebService服务
+	<!-- id：该服务名称	 address：该服务的访问路径(会自动加在 http://localhost:8180/crm/webservice后面) -->
+	<jaxws:server id="customerService" address="/cs">
+		<jaxws:serviceBean>
+			<!-- bean：指定该服务的实现类 -->
+			<ref bean="customerServiceImpl"/>
+		</jaxws:serviceBean>
+	</jaxws:server>
+
+3、在bos项目的utils子模块中配置客户端
+(1)使用wsimport或者wsdl2java命令生成本地代码,只保留接口文件和实体类,拷贝到bos_managment下的utils子模块的java中
+(2)在需要用到该WebService服务的工程(这里是bos的web子工程)中的applicationContext.xml添加约束并注册CRM服务
+	<!-- 注册WebService，只有注册了该服务才能在web中的action中调用到他 -->
+	<jaxws:client id="csClient" address="http://localhost:8180/crm/webservice/cs" serviceClass="com.itheima.crm.service.impl.CustomerService"></jaxws:client>
+(3)直接在web工程的Action中调用拷贝到utils中的WebService服务接口，该接口也就是该服务的入口
+
+4、JSP使用ajax异步获取已关联和未关联分区的客户
+	function doAssociations(){
+		// 判断是否已经选中了一个定区，弹出关联客户窗口 
+		var rows = $("#grid").datagrid('getSelections');
+		if(rows.length==1){
+			// 只选择了一个定区
+			// 弹出定区关联客户窗口 
+			$('#customerWindow').window('open');
+			//给隐藏域的区域ID赋值，以便能将该ID提交到后台
+			$("#customerFixedAreaId").val(rows[0].id)
+			//左右栏追加内容之前先将原来的数据清空，否则会造成重复数据
+			$("#associationSelect").empty()
+			$("#noassociationSelect").empty()
+			//获取所有未关联区域的客户
+			$.post("../../fixedAreaAction_findNotAssociated.action",
+			function(data){
+				$("#customerFixedId").val(data)
+				for(var i=0;i<data.length;i++){
+					$("#noassociationSelect").append("<option value='"+data[i].id+"'>"+data[i].username+'['+data[i].telephone+"]</option>");
+				}
+			},"json")
+			//获取所有与该选中区域关联的客户，需要传递该区域ID过去
+			$.post("../../fixedAreaAction_findAssociated.action","id="+rows[0].id,
+			function(data){
+				for(var i=0;i<data.length;i++){
+					$("#associationSelect").append("<option value='"+data[i].id+"'>"+data[i].username+'['+data[i].telephone+"]</option>");
+				}
+			},"json")
+		}else{
+			// 没有选中定区，或者选择 了多个定区
+			$.messager.alert("警告","关联客户,只能（必须）选择一个定区","warning");
+		}
+	}
+	//在发送之前把右边栏的所有选项都选上在提交数据时才会把右边的这些用户ID都传到后台
+	function customerFormSubmit(){
+		$("#associationSelect option").prop("selected","selected");
+		$("#customerForm").submit()
+	}
+
+提醒：for循环的数据长度里面是data.length而不是rows.length，循环条件使用var声明而不是int声明，接收json数据类型数据时json要用双引号引起来，java中字符串使用的双引号在js中尽量单引号表示，在内部拼接变量的时候需要用双引号。
+
+5、左右移动客户
+	// 把关联客户左侧下拉框中被选中的数据移动到右侧下拉框，原左边的数据会消失
+	function move2right() {
+		$("#associationSelect").append($("#noassociationSelect option:selected"))
+	}
+	// 把关联客户右侧下拉框中被选中的数据移动到左侧下拉框，原右边的数据会消失，
+	function move2left() {
+		$("#noassociationSelect").append($("#associationSelect option:selected"))
+	}
+
+6、将客户和定区绑定
+	public void assignCustomers2FixedArea(String fixedAreaId,List<Integer> ids) {
+        // 把和定区相关的客户清空定区ID
+        customerDAO.updateFixedAreaNullByFixedAreaId(fixedAreaId);  
+        // 为避免网络传过来的ids是空的，先做个校验
+        if (ids!=null&&ids.size()>0) {
+            for (Integer integer : ids) {
+                customerDAO.updateFixedAreaIdByCustomerId(fixedAreaId, integer);
+            }
+        }
+    }
+
+7、List集合在soap协议中传输的问题
+解析：在web层action中定义的存放int类型数值的List经过soap协议传输后会自动转换为Integer类型，所以可以使用Integer接收

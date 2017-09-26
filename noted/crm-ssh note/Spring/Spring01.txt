@@ -1,0 +1,70 @@
+1、IOC的演变
+new 对象 --> new 实现类 --> 采用工厂 (IOC)
+
+2、Spring入门案例
+(1)导入4个jar包:
+	spring-beans-4.3.10.RELEASE.jar、
+	spring-core-4.3.10.RELEASE.jar、
+	spring-context-support-4.3.10.RELEASE.jar、
+	spring-expression-4.3.10.RELEASE.jar
+(2)创建一个service接口和一个实现该接口的serviceimpl实现类
+(3)创建一个测试类，使用传统方式: new 实现类的方式实现业务
+(4)改用Spring配置文件实现对象的新建: 在项目src文件夹下面新建applicationContext.xml
+(5)导入约束: 				docs-->spring-framework-reference-->html文件夹最下面的xsd-configuration.html文件-->打开该html文件-->拖到最下面，复制beans schema的约束
+(6)在beans标签里面新建bean标签，写入对象的bean对象信息，class只能写入的是实现类全限定名，接口不能new
+(7)通过BeanFctory接口的子接口ApplicationContext使用ClassPathXmlApplicationContext接口载入src下面的配置文件applicationContext.xml创建一个工厂，该工厂读取所有bean标签的内容，一次性创建所有bean对象，所以配置了init-method和destroy-method的方会全部执行，一个bean标签产生一个bean对象，多个bean标签产生的bean对象属性不共用：
+	ApplicationContext context = new ClassPathXmlApplicationContext("applicationContext.xml");
+	向工厂获取bean对象：context.getBean("在配置文件的bean标签里面的name/id");
+	例子：UserService userService = (UserService) contect.getBean("us");
+	在关闭工厂时，ApplicationContext没有该close方法，要强转为AbstratApplicationContext才有close方法
+	关系为：BeanFctory --> ApplicationContext --> ClassPathXmlApplicationContext(加载配置文件的类) --> AbstratApplicationContext
+(8)导入Spring默认使用的slf4j日志框架的4个jar包，外加一个日志的properties配置文件
+	jcl-over-slf4j-1.7.24.jar
+	log4j-1.2.17.jar
+	slf4j-api-1.7.24.jar
+	slf4j-log4j12-1.7.24.jar
+(9)内存泄露和内存溢出
+	内存溢出：内存空间不足导致的溢出
+	内存泄露：无用的对象被丢弃后没有及时销毁，导致内存空间没有得到回收
+(10)在scope="prototype"时bean对象的新建模式是多例的，多次getBean得出来的是多个不同的对象
+	而默认的scope="singleton"模式为单例模式(默认不写)，无论使用多少次getBean得出来的都是同一个对象
+	
+	init-method：在创建bean实例的时候调用(值可以设置为自己写的某个方法)
+	destroy-method：根据单例或者多例模式下不同(注意destroy单词的写法)，如下：
+	单例模式下bean对象的destory会在销毁工厂时执行，而多例模式下bean对象的destory方法不会执行，由程序员自己控制销毁时间
+	<bean id="serviceimpl" class="service.impl.ServiceImpl" scope="prototype" init-method="init" destroy-method="destroy"></bean>
+	
+3、Spring的实例化方式：
+(1)无参构造方式(默认写法，bean标签里面只写id/name和class这两个属性)：要求类里面必须要有无参构造方法
+(2)静态工厂方式(static 	Factory)：
+bean标签里面的class改为指向自己写的工厂类，该工厂类有一个创建并返回bean对象的静态方法，bean标签里面还有一个factory-method属性，该属性的值为获取bean对象的方法(可以直接用 类名.getBean方法获取实例，所以不需要两个bean标签)
+(3)实例工厂方法(没有static)：要写两个bean标签(切记每个bean标签里面都要有一个id/name)
+	第一个bean标签里面的class为指向自己写的实例工厂
+	第二个bean标签里面写上factory-bean(写的是第一个bean的id值)和factory-method属性(getBean方法)
+	通过factory-bean找到工厂的全限定名，再把工厂给new出来，然后调用该工厂类的getBean方法(由于实例工厂方法需要先创建出对象才能调用getBean2方法，所以需要两个bean标签)
+后两个方法不使用spring框架提供的工厂，转而使用自己写的工厂(不推荐使用，功能太弱)
+
+4、Spring的属性注入(DI)
+(1)通过构造方法给bean对象赋值，在bean标签里面添加constructor-arg标签，里面的name和value中的name的值为该对象的一个属性名，value的值为该属性的值，Spring不仅可以通过无参构造实例化一个对象，还可以通过有参构造实例化对象，而前提就是在bean标签里面添加constructor-arg标签
+(2)set方式给bean对象赋值注入：
+>>在bean标签里面添加property标签，里面的name和value中的name的值为该对象的一个属性名，value的值为该属性的值，可以注入多个
+>>注入数组类型的值，在bean标签里面添加property标签，里面的name为该对象的一个数组名字，而在array标签里面有多个value标签
+>>注入Map集合的值，在bean标签里面添加property标签，里面的name为该对象的一个Map集合的名字，而在property标签里面的map标签里面有多个entry标签，该行标签里面分别有key和value两个属性
+>>注入对象数据(重点)：在UserServiceImpl里面声明一个UserDao对象,以及setUserDao方法，在配置文件里面新建两个bean标签，第一个标签是UserDao的bean，第二个是UserServiceImpl的bean，该bean里面使用set方法注入，property标签里面有name和ref属性，name属性的值为bean对象里面的某个属性名，ref属性的值为UserDao的bean里面的id/name属性值，在spring创建UserServiceImpl之前根据ref先去创建UserDao对象，然后才能完成UserServiceImpl对象的创建，这两个bean对象必须要有无参构造方法：
+    <!-- 将User对象注入到ServiceImpl对象里面去，name属性为ServiceImpl对象里面的一个属性 -->
+    <bean id="user1" class="bean.User"></bean>
+    <bean id="s1" class="service.impl.ServiceImpl">
+    	<property name="user" ref="user1"></property>
+    </bean>
+(3)使用c名称空间，代替constructor-arg做法，需要声明有参构造方法
+	导入c标签约束：
+	xmlns:c="http://www.springframework.org/schema/c"
+	使用c标签设置属性值：
+	<bean id="foo" class="x.y.Foo" c:bar-ref="bar" c:baz-ref="baz" c:email="foo@bar.com"/>
+(4)使用p名称空间，代替set方法的注入，需要在bean里面有set这个方法
+	导入p标签约束：
+	xmlns:p="http://www.springframework.org/schema/p"
+	使用p标签设置属性值：
+	<bean name="p-namespace" class="com.example.ExampleBean" p:email="foo@bar.com"/>
+(5)el属性注入
+后面这3种方法举要导入约束

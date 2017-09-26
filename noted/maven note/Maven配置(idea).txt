@@ -1,0 +1,67 @@
+1、配置电脑全局Maven环境
+解压apache-maven-3.3.9-bin.zip，将bin目录配置到环境变量的path里面去
+
+2、配置本地仓库
+(1)解压本地仓库压缩包到不带空格和中文的文件夹
+(2)将本地仓库的文件夹路径复制到maven安装目录-->conf-->settings.xml里面，添加如下配置：
+	<localRepository>C:\MavenRepository</localRepository>
+	
+3、idea上配置maven以及新建Maven工程
+(1)新建一个项目，选择Maven项目 --> 勾上Create from archetype --> 选择webapp结尾的那个
+	(切记，中间单词不是cocoon那个，而是archetype的那个)
+(2)设置本地安装的maven以及maven的配置文件，在参数的窗口添加一个参数，让maven从本地仓库拿jar包
+	name = archetypeCatalog ; value = internal
+(3)等待项目自动准备好相关操作后在main下面新建一个java文件夹，右键选择Mark Directory as --> Sources Root 		
+	将该文件夹变为存放代码的文件夹，还有其他的比如存放配置文件的文件夹要右键选择Mark Directory as --> Resources Root
+(4)设置好上面的事项后就可以在java下面新建包了
+(5)点击右上角的Edit Configurations配置tomcat，接下来点击+号，不能点Default里面那个tomcat，向tomcat添加项目时选择exploed那个
+(6)IDEA更新项目的方式：右键pom文件 --> Maven --> Reimport
+
+4、IDEA配置svn
+(1)打开设置 --> Version Control --> Subversion --> 将General一栏的两个勾去掉才可以使用svn
+(2)从svn导入项目：VCS --> Check Out from Version Control
+(3)取消与svn关联：
+	打开Intellij的setting（ctrl+alt+s），选择plugins，在右边搜索框输入“SVN”，搜索。选择“SVN disconnect”，安装此插件
+
+5、IDEA直连数据库
+点击最左下角的方块，左右的侧边栏会出现，点开右侧边栏的 DataBase 里面即可连接数据库，首次连接需要下载数据库驱动
+
+6、配置全局JDK
+ 在{Maven_home}\conf\settings.xml文件中添加以下内容。添加在<profiles>节点中。具体版本请根据自己电脑上安装的JDK版本来设置：
+	<profile>  
+		<id>jdk1.8</id>  
+		<activation>  
+			<activeByDefault>true</activeByDefault>  
+			<jdk>1.8</jdk>  
+		</activation>  
+		<properties>  
+			<maven.compiler.source>1.8</maven.compiler.source>  
+			<maven.compiler.target>1.8</maven.compiler.target>  
+			<maven.compiler.compilerVersion>1.8</maven.compiler.compilerVersion>  
+		</properties>   
+	</profile>
+	
+	接下来要激活该配置，在<settings>节点里面添加如下代码：
+	<activeProfiles>
+      <!-- 要激活的模版id -->
+  	  <activeProfile>jdk1.8</activeProfile>
+    </activeProfiles>
+	
+7、配置阿里云代理，在{Maven_home}\conf\settings.xml文件中添加以下内容。添加在<mirrors>节点中:
+	<mirror>
+		<!--This sends everything else to /public -->
+		<id>nexus</id>
+		<mirrorOf>*</mirrorOf> 
+		<url>http://maven.aliyun.com/nexus/content/groups/public/</url>
+	</mirror>
+	
+8、JSP页面EL表达式不起作用解决办法(在保证pom文件已导入JSP依赖的情况下，2.3之后的版本才支持el表达式，idea默认的是2.3)
+(1)统一更改web.xml的web-app标签中的命名空间，改成如下代码：
+	[添加之前先删掉DOCTYPE web-app PUBLIC那部分内容]
+	<web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
+           http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
+           version="3.1">
+	</web-app>
+(2)每次新建jsp文件时在jsp页面开头添加<%@ page isELIgnored="false"%>

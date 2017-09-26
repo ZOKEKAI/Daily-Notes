@@ -1,0 +1,33 @@
+当用户输入关键字时，实时从数据库查询数据并显示在搜索框下面，当搜索框失去焦点后搜索框下面的提示框消失 
+
+<script type="text/javascript">
+ 	$("#inputId").keyup(function(){
+ 		
+ 		//获得tab对象
+ 		var $tabObj =  $("#tabId");
+ 		//移除之前数据
+ 		$tabObj.html("");
+ 		
+ 		//获得用户输入的关键词
+ 		var key = this.value;
+ 		//如果key为空
+ 		if(key == ""){
+ 			$("#divId").hide();
+ 			return;
+ 		}
+ 		
+ 		//发送Ajax请求,把关键词提交到WordServlet (数据就是JSON)
+ 		//$.get(url.请求参数,function(){},"json")
+ 		//$.getJSON(url, [data], [callback])
+ 		$.getJSON("${pageContext.request.contextPath}/productServlet?method=wordSearch",{"key":key},function(result){
+ 			//alert("result="+result);[] js对象
+ 			if(result=="[]"||result==""||result==null){
+				$tabObj.append("<tr><td align='center'>找不到对象！</td></tr>");
+			}
+ 			$(result).each(function(i,obj){
+ 				$("#divId").show();
+ 	 			$tabObj.append("<tr><td align='center'>"+"<a href='${pageContext.request.contextPath}/productServlet?method=findByPid&pid="+obj.pid+"'>"+obj.pname+"</td></tr>");
+ 			});
+ 		});
+ 	});
+ </script>

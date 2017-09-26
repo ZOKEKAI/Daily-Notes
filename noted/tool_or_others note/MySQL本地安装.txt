@@ -1,0 +1,203 @@
+fedora25 采用二进制包安装mysql5.5.49
+
+#添加用户和组
+
+groupadd mysql
+useradd -s /sbin/nologin -g mysql -M mysql
+tail -1 /etc/passwd
+id mysql
+#安装依赖包
+
+[root@zabbix-server mysql]# dnf install libncurses.so.5 -y
+ 
+
+#开始安装MySQL
+
+[root@zabbix-server tools]# http://dev.mysql.com/get/Downloads/MySQL-5.5/mysql-5.5.49-linux2.6-x86_64.tar.gz
+[root@zabbix-server tools]# cd /home/nulige/tools
+[root@zabbix-server tools]# ll
+total 181516
+-rw-r--r--. 1 root root 185870973 Jun 22 02:40 mysql-5.5.49-linux2.6-x86_64.tar.gz
+
+[root@zabbix-server tools]# tar xf mysql-5.5.49-linux2.6-x86_64.tar.gz
+
+[root@zabbix-server tools]# mkdir -p /application/
+
+[root@zabbix-server tools]# mv mysql-5.5.49-linux2.6-x86_64 /application/mysql-5.5.49
+
+[root@zabbix-server tools]# ln -s /application/mysql-5.5.49/ /application/mysql
+
+[root@zabbix-server tools]# ls -l /application/mysql
+lrwxrwxrwx. 1 root root 26 Jun 22 02:41 /application/mysql -> /application/mysql-5.5.49/
+
+[root@zabbix-server tools]# cd /application/mysql/
+
+[root@zabbix-server mysql]# ls -l support-files/*.cnf
+-rw-r--r--. 1 7161 wheel 4691 Mar 1 2016 support-files/my-huge.cnf
+-rw-r--r--. 1 7161 wheel 19759 Mar 1 2016 support-files/my-innodb-heavy-4G.cnf
+-rw-r--r--. 1 7161 wheel 4665 Mar 1 2016 support-files/my-large.cnf
+-rw-r--r--. 1 7161 wheel 4676 Mar 1 2016 support-files/my-medium.cnf
+-rw-r--r--. 1 7161 wheel 2840 Mar 1 2016 support-files/my-small.cnf
+
+[root@zabbix-server mysql]# /bin/cp support-files/my-small.cnf /etc/my.cnf
+
+[root@zabbix-server mysql]# mkdir -p /application/mysql/data
+
+[root@zabbix-server mysql]# chown -R mysql.mysql /application/mysql/
+
+[root@zabbix-server mysql]# /application/mysql/scripts/mysql_install_db --basedir=/application/mysql --datadir=/application/mysql/data --user=mysql
+Installing MySQL system tables...
+170622 2:42:34 [Note] /application/mysql/bin/mysqld (mysqld 5.5.49) starting as process 7032 ...
+OK
+Filling help tables...
+170622 2:42:35 [Note] /application/mysql/bin/mysqld (mysqld 5.5.49) starting as process 7039 ...
+OK
+
+To start mysqld at boot time you have to copy
+support-files/mysql.server to the right place for your system
+
+PLEASE REMEMBER TO SET A PASSWORD FOR THE MySQL root USER !
+To do so, start the server, then issue the following commands:
+
+/application/mysql/bin/mysqladmin -u root password 'new-password'
+/application/mysql/bin/mysqladmin -u root -h zabbix-server password 'new-password'
+
+Alternatively you can run:
+/application/mysql/bin/mysql_secure_installation
+
+which will also give you the option of removing the test
+databases and anonymous user created by default. This is
+strongly recommended for production servers.
+
+See the manual for more instructions.
+
+You can start the MySQL daemon with:
+cd /application/mysql ; /application/mysql/bin/mysqld_safe &
+
+You can test the MySQL daemon with mysql-test-run.pl
+cd /application/mysql/mysql-test ; perl mysql-test-run.pl
+
+Please report any problems at http://bugs.mysql.com/
+
+ 
+
+[root@zabbix-server mysql]# cp support-files/mysql.server /etc/init.d/mysqld
+
+[root@zabbix-server mysql]# chmod +x /etc/init.d/mysqld
+
+[root@zabbix-server mysql]# ll /etc/init.d/mysqld
+-rwxr-xr-x. 1 root root 10880 Jun 22 02:42 /etc/init.d/mysqld
+
+[root@zabbix-server mysql]# sed -i 's#/usr/local/mysql#/application/mysql#g' /application/mysql/bin/mysqld_safe /etc/init.d/mysqld
+
+ 
+
+[root@zabbix-server mysql]# service mysqld start
+Unit mysqld.service could not be found.
+Starting MySQL... SUCCESS!
+
+ 
+
+ 
+
+[root@zabbix-server mysql]# netstat -lntup|grep mysql
+tcp 0 0 0.0.0.0:3306 0.0.0.0:* LISTEN 7314/mysqld 
+
+[root@zabbix-server mysql]# chkconfig --add mysqld
+
+[root@zabbix-server mysql]# chkconfig mysqld on
+
+[root@zabbix-server mysql]# chkconfig --list mysqld
+
+Note: This output shows SysV services only and does not include native
+systemd services. SysV configuration data might be overridden by native
+systemd configuration.
+
+If you want to list systemd services use 'systemctl list-unit-files'.
+To see services enabled on particular target use
+'systemctl list-dependencies [target]'.
+
+mysqld 0:off	1:off	2:on	3:on	4:on	5:on	6:off
+
+ 
+
+[root@zabbix-server mysql]# echo 'export PATH=/application/mysql/bin:$PATH' >>/etc/profile
+
+[root@zabbix-server mysql]# tail -1 /etc/profile
+export PATH=/application/mysql/bin:$PATH
+
+[root@zabbix-server mysql]# source /etc/profile
+
+[root@zabbix-server mysql]# echo $PATH
+/application/mysql/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin
+
+ 
+
+[root@zabbix-server mysql]# mysql -uroot -p
+Enter password: 不知道密码。
+
+#准备修改原始密码
+[root@zabbix-server mysql]# service mysqld stop
+Shutting down MySQL. SUCCESS!
+
+[root@zabbix-server mysql]# mysqld_safe --skip-grant-tables&
+[1] 7584
+[root@zabbix-server mysql]# 170622 03:06:08 mysqld_safe Logging to '/application/mysql/data/zabbix-server.err'.
+170622 03:06:08 mysqld_safe Starting mysqld daemon with databases from /application/mysql/data
+
+#登录mysql
+[root@zabbix-server mysql]# mysql -uroot -p
+Enter password: #直接回车，不需要密码
+Welcome to the MySQL monitor. Commands end with ; or \g.
+Your MySQL connection id is 1
+Server version: 5.5.49 MySQL Community Server (GPL)
+
+Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+#设置新密码
+mysql> UPDATE mysql.user SET password=PASSWORD("********") WHERE user='root';
+Query OK, 3 rows affected (0.00 sec)
+Rows matched: 4 Changed: 3 Warnings: 0
+
+mysql> flush privileges;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> exit
+Bye
+
+ 
+
+#登录数据库
+[root@zabbix-server mysql]# mysql -uroot -p
+Enter password: 输入新密码
+Welcome to the MySQL monitor. Commands end with ; or \g.
+Your MySQL connection id is 2
+Server version: 5.5.49 MySQL Community Server (GPL)
+
+Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql> show databases;
++--------------------+
+| Database |
++--------------------+
+| information_schema |
+| mysql |
+| performance_schema |
+| test |
++--------------------+
+4 rows in set (0.00 sec)
+
+mysql> exit
+Bye

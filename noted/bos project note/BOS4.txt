@@ -1,0 +1,69 @@
+1、在CourierAction中分页查询的方法中添加多条件查询时    
+		// 查询数据
+		Page<Courier> page = courierService.pageQuery(pageable);
+	改为：	
+		// 查询数据
+		Page<Courier> page = courierService.pageQuery(specification,pageable);
+		
+	切记要在Service层新增findAll(specification, pageable)这个方法，而不能在原来的findAll(pageable)括号内仅添加specification。
+
+2、使用StringUtils.isNotEmpty(company)时导的包为：import org.apache.commons.lang3.StringUtils;
+
+3、点击查询弹出框的查询按钮触发的事件
+	function realSearch(){
+		// 将用户在弹出的搜索框中输入的查询条件key/value拼装成json字符串
+		var json = $("#searchForm").serializeJson()
+		// 调用datagrid的重新加载数据方法,将json数据作为查询条件，点击查询按钮后再次进行查询
+		$("#grid").datagrid("load", json)
+		// 点击查询按钮后关闭查询弹出框
+		$("#searchWindow").window("close")
+	}
+	
+	//$("#grid").datagrid("load", json)查询到的数据添加到下面的table里面去
+	<table id="grid"></table>
+	
+4、前端页面显示不出来的原因
+	columns : [[{
+					field : 'startNum',
+					title : '起始号',
+					width : 100,
+					align : 'center'
+				}]]
+	属性field的值:startNum必须与bean类里面的属性名对应。
+	
+5、给JSP添加上传文件功能，并在后台接收该文件
+(1)拷贝jquery.ocupload-1.1.2.js到项目，并且在页面引入该js文件
+(2)在页面添加点击事件并新建他的响应函数
+	//工具栏添加导入文件按钮
+	var toolbar = [{
+		id : 'button-import',
+		text : '导入',
+		iconCls : 'icon-redo',
+		handler : doImport
+	}];
+	
+	//设置按钮触发函数，该函数会自动将上传的文件传到areaAction里面的importXLS这个方法中，并且文件路径为areaFile
+	function doImport(){
+		$("#button-import").upload({
+			// 请求参数	
+			name:"areaFile",
+			// 请求地址
+			action:"../../areaAction_importXLS.action"
+		})
+	}
+	
+	或者把doImport的方法体放到入口函数里面去，并且删掉handler : doImport这一行
+(3)Action中声明一个属性用于接收文件路径(包含路径的文件名，例如：C:\D\ee.txt)
+	  private File areaFile;
+	  public void setAreaFile(File areaFile) {
+		this.areaFile = areaFile;
+	  }
+特别说明：使用该方式上传的文件为tmp临时文件，程序运行过后文件就被删除，使用debug模式让程序停留即可看到上传的临时文件，一般做法为在程序运行结束之前使用流的方式读取文件的数据，读取完成之后再结束方法。
+
+6、抽取BaseAction时获取类型代码放在构造方法里面，在泛型类中在运行时才能知道其类型，运行时获取其类型的方法为：
+    public BaseAction() {
+        Type genericSuperclass = this.getClass().getGenericSuperclass();
+        ParameterizedType parameterizedType = (ParameterizedType)genericSuperclass;
+        Class<T> modelClass = (Class<T>) parameterizedType.getActualTypeArguments()[0];
+        model = modelClass.newInstance();
+    }

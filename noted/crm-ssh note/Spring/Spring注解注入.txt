@@ -1,0 +1,67 @@
+1、先配置注解扫描开关，如果配置了<context:component-scan>那么<context:annotation-config/>标签就可以不用在xml中配置了，
+因为<context:component-scan>包含了<context:annotation-config/>
+例如：<context:component-scan base-package="com.itheima"></context:component-scan>
+
+2、在xml配置了这个标签后，Spring可以自动去扫描base-pack下面或者子包下面的Java文件，如果扫描到有
+@Component @Controller @Service @Repository等这些注解的类，则把这些类全部注册为bean，并存到Spring
+
+(1)@Controller：一般用于注册web层对象
+(2)@Service：一般用于注册service层对象
+(3)@Repository：一般用于注册dao层对象
+(4)@Component：该类不属于web、service、dao层时可以使用该标签进行注册
+
+
+3、使用注解完成对象的创建以及向对象注入对象：
+
+(1)Action层：
+	
+	++@Controller("customerAction")表示由Spring注册一个名为customerAction的bean对象(相当于xml配置的bean)，并设置为多例模式
+	@Controller("customerAction")
+	@Scope("prototype")
+	@Namespace("/")		//使用注解代替struts.xml文件里面的namespace属性
+	@ParentPackage("struts-default")	//使用注解代替struts.xml文件里面的extends属性
+	public class CustomerAction extends ActionSupport implements ModelDriven<Customer>{
+		
+		@Autowired
+		private CustomerService customerService;
+		...
+		
+		//使用注解代替action标签，value即为action标签的name属性
+		@Action(value = "standardAction_save", results = {@Result(name = "success", location = "/pages/base/standard.html", type = "redirect")})
+		public String save() {
+			standardService.save(standard);
+			return "success";
+		}
+	}
+	
+(2)Service层：
+	
+	@Transactional	(开启事务)
+	@Service("customerService")	(注册CustomerServiceImpl这个对象，并命名为：customerService)
+	public class CustomerServiceImpl implements CustomerService {
+		
+		@Autowired	(自动注入Spring工厂里面一个类型为CustomerDao的对象)
+		private CustomerDao customerDao;
+		
+		public void save(Customer customer) {
+			customerDao.save(customer);
+		}
+	}
+	
+(3)Dao层：
+	
+	@Repository("customerDao")	(将CustomerDaoImpl注册为名叫"customerDao"的对象，并放入Spring对象仓库)
+	public class CustomerDaoImpl extends HibernateDaoSupport implements CustomerDao {
+		
+		@Resource  (向dao层注入sessionFactory，实际上是向HibernateDaoSupport注入)
+		public void setMySessionFactory(SessionFactory sessionFactory){  
+			super.setSessionFactory(sessionFactory);  
+		} 
+		...
+	}
+	
+区别：
+	
+	两个注解均可用来将Spring仓库的bean对象装配进声明的属性中
+	@Resource默认按照名称进行装配
+	@Autowired默认按照类型匹配，如果想要按照名称装配，可以写为：@Autowired@Qualifier("customerDao")

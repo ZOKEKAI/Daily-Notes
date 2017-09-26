@@ -1,0 +1,98 @@
+1、ActionContextCleanUp作用：延长action中属性的生命周期
+
+2、SiteMesh Filter作用：通过截取reponse，并进行装饰后再交付给客户(指定哪个页面使用哪个模板)
+
+3、复制<filter-class>的内容时切记不能带.class，应该写为：
+<filter-class>org.apache.struts2.dispatcher.ng.filter.StrutsPrepareAndExecuteFilter</filter-class>
+
+4、在struts.xml中配了<action>标签而项目中没有相应的action类时启动会报错
+
+5、在转发和重定向action配置中，actionDemo前面不能加斜杠"/"
+<result name="succee" type="chain">actionDemo04_update</result>
+<result name="succee" type="redirectAction">actionDemo02_del</result>
+
+6、在没有使用struts2的json插件之前声明List集合时不能仅写成private List<User> list，因为后面要调用，会照成空指针异常，应该写为：
+private List<User> list = new ArrayList<>();
+没有使用struts2的json插件时，没有解决中文乱码问题，使用后该问题得到解决
+
+7、struts.xml文件里面namespace属性后面始终有"/"，切记
+
+8、注意事项：param标签写的是在actionDemo06里面get方法返回值的名称
+	<package name="json" namespace="/json" extends="json-default">
+		<action name="actionDemo06_*" class="com.itcast.web.ActionDemo06_json_无需转换" method="{1}">
+			<result name="success" type="json">
+				<param name="root">list</param>
+			</result>
+		</action>
+	</package>
+	
+	public List<User> getList() {
+		return list;
+	}
+	
+9、将前端JSP页面数据封装到一个User对象中，JSP页面的属性要设置为user.username形式，并且User对象(bean对象)里面必须要有username这个属性，在Action端必须要有getUser方法，否则struts2底层会每次自己新建一个对象，然后赋值，导致Action获取到的user对象的属性永远只有一个，并且要有setUser方法，否则Action接收不到struts2封装好的User对象
+前端JSP页面：
+	账号： <input type="text" name="user.username"/><br> 
+	密码： <input type="password" name="user.password"/><br> 
+Action端：
+	public class ActionDemo10_getData封装对象数据 extends ActionSupport{
+		private User user;
+		public User getUser() {
+			return user;
+		}
+		public void setUser(User user) {
+			this.user = user;
+		}
+		public String add() {
+			System.out.println(user);
+			return NONE;
+		}
+	}
+	
+10、通过实现Model接口实现数据的封装时，在Action中在getModel()方法返回user对象之前必须要手动new一个User对象，否则不能封装，而前端JSP页面中的name属性不需要写成user.username形式，直接写成username即可
+
+11、使用集合封装多个User对象及数据(List等集合也类似)，先声明一个key为String而value为User的map集合，再编写setMap和getMap方法，以及JSP要访问的addMap方法
+前端JSP页面：
+	账号： <input type="text" name="map['11'].username"/><br> 
+	密码： <input type="password" name="map['11'].password"/><br> 
+	(List集合方式：账号： <input type="text" name="list[0].username"/><br>)
+Action端：
+	private Map<String,User> map;
+	public Map<String, User> getMap() {
+		return map;
+	}
+	public void setMap(Map<String, User> map) {
+		this.map = map;
+	}
+	public String addMap() {
+		System.out.println(map);
+		return NONE;
+	}
+	
+12、在使用ModelDriven或者对象属性封装方法时，如果bean对象中重写了toString方法，则在页面debug栏中直接显示该对象的信息，而不是显示地址，前端页面每取值一次，调用一次getUser(对象属性封装方式)或者getModel(模型方式)方法
+
+13、拦截器interceptors在struts.xml文件配置时必须放在使用他的action之前
+
+14、只拦截action，不拦截其他的，例如JSP页面等，执行拦截器后记得使用arg0.invoke()放行
+
+15、拦截器栈声明在拦截器interceptors标签里面，标签为<interceptor-stack name="diy">，使用<default-interceptor-ref name="diy"/>指定所有action使用默认的拦截器栈，diy为自定义的栈名
+
+16、myInterceptor2下面的<param name="excludeMethods">test2,test3</param>表示该拦截器不拦截test2和test3方法，其他方法均拦截
+		<!-- 声明拦截器 -->
+		<interceptors>
+			<interceptor name="myInterceptor1" class="test.MyInterceptor01"></interceptor>
+			<interceptor name="myInterceptor2" class="test.MyInterceptor02"></interceptor>
+			
+			<!-- 在拦截器声明里面再声明一个拦截器栈 -->
+			<interceptor-stack name="diy">
+				<interceptor-ref name="defaultStack"></interceptor-ref>
+				<interceptor-ref name="myInterceptor1"></interceptor-ref>
+				<interceptor-ref name="myInterceptor2">
+					<param name="excludeMethods">test2,test3</param>
+				</interceptor-ref>
+			</interceptor-stack>
+		</interceptors>
+		<default-interceptor-ref name="diy"/>
+		<action name="actionDemo_*" class="test.ActionDemo" method="{1}">
+			<result name="success">/index.jsp</result>
+		</action>

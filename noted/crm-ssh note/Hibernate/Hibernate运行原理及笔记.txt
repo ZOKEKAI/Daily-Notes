@@ -1,0 +1,61 @@
+1、Mapping.java
+
+Mapping：是一个存储javabean属性和数据库表数据一一对应关系的java对象，一个xml映射文件生成一个mapping对象，该类里面的属性有以下几个(可见该java对象就是映射文件在程序运行时的实体化对象)：	
+	//类名和表名(className是某个bean对象的全限定名，tableName是数据库里面与该bean对象对应的表名)
+	private String className;
+	private String tableName;
+	
+	//主键id(idProperty是bean对象的id属性)
+	private String idProperty;
+	private String idColumn;
+	
+	//其它的属性(key是JavaBean属性,值是数据库里面的列名)
+	private Map<String, String> properties = new HashMap<String, String>();
+
+
+2、MappingUtils.java
+
+MappingUtils：在程序运行时Configuration类调用MappingUtils时给MappingUtils类传入一个映射xml文件的存储路径，MappingUtils负责解析该路径下的xml文件，并取出该xml文件里面的数据，新建一个Mapping对象，将一个xml里面的所有信息封装到一个Mapping对象里面，并返回给调用者(补充：keySet是键的集合)
+	(properties表示的是mapping对象里面存储所有普通属性的map集合，key是JavaBean属性,值是数据库里面的列名)
+	Map<String, String> properties = mapping.getProperties();
+	(properties.entrySet()方法获取的是该map集合里面所有属性的键值对，entrySet是 键-值 对的集合)
+	Set<Entry<String, String>> entrySet = properties.entrySet();
+	
+	
+3、Configuration.java
+
+Configuration：专门来管理配置,通过解析hibernate.cfg.xml文件，并调用MappingUtils.parseXml()方法，给MappingUtils.parseXml()方法传入hibernate.cfg.xml文件里面的多个映射文件的路径，调用MappingUtils生成多个mapping对象，并将这些mapping对象存到一个mappingMap(map集合)中，key为该bean类的全限定名，值为mapping对象。
+
+在Configuration中，有个用于生产session对象的openSession方法，在new出来的session对象中，给其传入存有所有mapping对象的mappingMap集合，而在用户调用session.save(student)方法使用session时，session会根据传入的student对象，从mappingMap集合里面取出与该student对象一一对应的mapping对象
+	Session session = new  Session();
+	session.setMappingMap(mappingMap);
+	
+	
+4、Session.java
+
+Session：Configuration在产生session对象时已经给session对象传入了包含所有映射对象的mappingMap集合，在用户调用session执行对数据库的增删查改操作时，会给session传入一个要操作的对象(例如:session.save(student))，session里面会根据该对象的全限定名，取出与该对象对应的mapping，通过反射的方式，利用mapping里面的属性名，从传进来的对象(例如student对象)里面获取到每一个属性对象，经过暴力反射后获取到该传进来的对象(student)的所有属性的值，将从mapping对象里面获取到的列名和传进来的对象(例如student对象)里面属性的值,拼接到sql语句里面去
+
+	//定义数组的大小即为属性集合的长度
+	Object[] params = new Object[entrySet.size()];
+	
+	
+5、SessionFactory.java
+
+通过Configuation实例创建SessionFactory实例，SessionFactory一旦构建完毕，即被赋予特定的配置信息。也就是说，之后config的任何变更将不会影响到已经创建的SessionFactory实例（SessionFactory）。如果需要使用基于改动后的config实例的SessionFactory，需要从config重新构建一个SessionFactory实例。一般情况下，一个项目通常只需要一个SessionFactory就够，当需要操作多个数据库时，可以为每个数据库指定一个SessionFactory。
+	
+	
+**Hibernate执行原理(例子：给数据库存入一个用户，其他操作略)：**
+
+(1)Configuration config=new Configuration() 新建Configuration对象
+(2)configuration.config() 调用config()方法，该方法会默认加载src下面的hibernate.cfg.xml文件
+(3)config()方法解析hibernate.cfg.xml文件，将每一行mapping元素所包含的地址通过for循环遍历出来，并将该行地址作为参数传递到MappingUtils.parseXml方法里面，执行该方法：MappingUtils.parseXml("src/"+resourceValue);
+(4)MappingUtils.parseXml方法将传进来的地址下面的xml映射文件信息解析出来，按照对应的属性，封装成一个mapping对象，并返回给调用者
+(5)config()方法里面将每次for循环封装出来的mapping对象作为value添加到mappingMap集合里面去，key为该bean对象的全限定名
+(6)SessionFactory sessionFactory=config.buildSessionFactory()：
+通过Configuation实例创建SessionFactory实例，并将Configuation实例里面的所有配置信息(包括mappingMap集合等)放入SessionFactory缓存里面去，然后这个被创建出来的SessionFactory便与Configuation实例没有关系，也就是说，之后config的任何变更将不会影响到已经创建的SessionFactory实例，要想应用这些config变更需要再创建一个SessionFactory
+(7)Session session = sessionFactory.openSession()：
+从session的工厂中创建一个session对象，将SessionFactory缓存里面的配置信息(mappingMap集合等)分配到该session对象，并且与从连接池里面取出一条connection建立连接关系，该session在调用close()方法关闭session时session与该connection脱离关联。
+(8)在创建session对象的时候将该session对象已经包含了所有映射关系的mappingMap集合
+(9)在使用session对象执行sql语句时时需要传入传入一个bean对象，获取该传入的bean对象的全限定名，作为key从mappingMap集合里面取出与之对应的mapping对象
+(10)得到mapping对象后先通过mapping.getTableName()获得表名，拼接到sql语句中，接下来取出mapping对象中用于存储普通属性的map集合，使用entrySet方法获取该map集合的所有键值对
+(11)遍历该map集合的所有键值对，将key(数据库表的列名)取到，同时也取出value(bean对象的某个属性名)，通过反射的方式，利用该属性名，从传进来的对象(例如student对象)里面获取到对应的属性对象，经过暴力反射后获取到传进来的student对象里面该属性的值，将该值和前面获取到的key拼接到sql语句，从而得到完整的sql语句

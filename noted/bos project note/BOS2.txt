@@ -1,0 +1,41 @@
+1、Spring Data JPA的核心接口
+- Repository：最顶层的接口，是一个空的接口，目的是为了统一所有Repository的类型，且能让组件扫描的时候自动识别。
+- CrudRepository ：是Repository的子接口，提供CRUD的功能
+- PagingAndSortingRepository：是CrudRepository的子接口，添加分页和排序的功能
+- JpaRepository：是PagingAndSortingRepository的子接口，增加了一些实用的功能，比如：批量操作等。
+- JpaSpecificationExecutor：用来做负责查询的接口
+- Specification：是Spring Data JPA提供的一个查询规范，要做复杂的查询，只需围绕这个规范来设置查询条件即可
+
+2、Spring Data JPA使用步骤：
+(1)导入JPA依赖
+	<dependency>
+		<groupId>org.springframework.data</groupId>
+		<artifactId>spring-data-jpa</artifactId>
+		<version>${springdatajpa.version}</version>
+	</dependency>
+(2)在applicationContext.xml中增加如下配置，配置Spring Data JPA扫描目录
+	<jpa:repositories base-package="com.itheima.bos.dao" />
+(3)在bos_managment_dao项目中新建com.itheima.bos.dao.base包，并且创建操作派送标准的DAO
+
+	// 泛型参数1 ： 实体类(Standard)
+	// 泛型参数2 ： 实体类中主键的类型(Integer)
+	// Dao层接口继承JpaRepository接口(根据需要来继承)，类上面不需要注解，事务在service层开启
+	public interface StandardDAO extends JpaRepository<Standard, Integer> {
+		/*只要满足JPA的命名规范就不需要自己添加@Query自定义查询语句
+		命名规范在Day64_BOS_02.rar压缩文件的SpringDataJPA.pptx文档*/
+		  
+		//符合命名规范的查询
+		List<Standard> findByName(String name);
+		Standard findByNameAndMinWeight(String name, Integer id);
+		List<Standard> findByNameLike(String name);
+		List<Standard> findByMinWeightIsNull();
+		  
+		// 使用原生SQL进行查询操作时需要在后面添加nativeQuery = true，和前面用逗号分开
+		@Query(value = "select * from T_STANDARD where C_MIN_WEIGHT = ? and C_NAME = ? ", nativeQuery = true)
+		Standard findByNameAndMinWeightxxxx(Integer weight, String name);
+		  
+		@Transactional  //一般事务都在service层开启，但由于用测试类来测试，所以在这个地方开启
+		@Modifying    // 增删改这些操作都要添加@Modifying注解,代表这是一个更新操作
+		@Query("update Standard set minWeight = ?2 where name = ?1")  //数值1和2代表参数位置，一般默认不去改动
+		void updateMinWeightByName(String name, Integer weight);
+	}

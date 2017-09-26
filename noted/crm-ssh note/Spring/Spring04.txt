@@ -1,0 +1,219 @@
+1、Spring整合Struts2
+(1)导入Spring需要的jar包
+	spring-beans-4.3.10.RELEASE.jar、
+	spring-core-4.3.10.RELEASE.jar、
+	spring-context-4.2.9.RELEASE.jar、
+	spring-context-support-4.3.10.RELEASE.jar、
+	spring-expression-4.3.10.RELEASE.jar
+	spring-web-4.2.9.RELEASE.jar
+	jcl-over-slf4j-1.7.24.jar
+	log4j-1.2.17.jar
+	slf4j-api-1.7.24.jar
+	slf4j-log4j12-1.7.24.jar
+(2)导入Struts2需要的jar包(解压例子工程，然后导入例子工程的lib里面jar包即可)
+(3)新建一个Action类，使用普通POJO
+(4)在struts.xml里面配置好Action，约束可在struts-core的jar包里面找到，直接复制以下这段约束粘贴到struts.xml里面：
+   <!DOCTYPE struts PUBLIC
+	"-//Apache Software Foundation//DTD Struts Configuration 2.3//EN"
+	"http://struts.apache.org/dtds/struts-2.3.dtd">
+(5)在web.xml配置好过滤器(可在struts-core的jar包里面找到)
+	  <filter>
+		<filter-name>struts2</filter-name>
+		<filter-class>org.apache.struts2.dispatcher.ng.filter.StrutsPrepareAndExecuteFilter</filter-class>
+	  </filter>
+	  <filter-mapping>
+		<filter-name>struts2</filter-name>
+		<url-pattern>/*</url-pattern>
+	  </filter-mapping>
+(6)使用Spring管理action以及三层结构的对象，需要先导包：struts2-spring-plugin-2.3.32.jar
+必须要在web.xml里面的filter过滤器前加入Spring的监听器，否则Spring的该管理对象的功能不起作用，该监听器在监听到项目启动时便新建applicationContext.xml文件里面的所有对象，并注入好对象及属性
+	  <!-- spring的监听器配置 -->
+	  <listener>
+		<listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+	  </listener>
+	  
+	  <!-- 配置参数，也就是告诉spring，这个xml文件的位置在哪 -->
+	  <context-param>
+		<param-name>contextConfigLocation</param-name>
+		<param-value>classpath:applicationContext.xml</param-value>
+	  </context-param>
+	  
+	然后将applicationContext.xml里面的配置如下：
+	<bean id="action" class="com.ssh.web.Action01">
+		<property name="userService" ref="userService"></property>
+	</bean>
+	
+	<bean id="userService" class="com.ssh.service.impl.UserServiceImpl">
+		<property name="userDao" ref="userDao"></property>
+	</bean>
+	
+	<bean id="userDao" class="com.ssh.dao.impl.UserDaoImpl"></bean>
+	
+由于action对象已经交给Spring管理了，所以在struts.xml文件里面的class属性应该改为applicationContext.xml文件里该action对象的id属性值，在applicationContext里面托管action，action的实例要做成多例的。否则就会出现并发问题，或者是值栈只有一个。
+
+
+2、Spring整合Hibernate
+
+(1)导入Hibernate/lib里面的required文件夹的所有jar包(必须的jar包)，以及mysql的jdbc驱动jar包
+(2)导入约束：
+	**Hibernate-mapping约束：hibernate-core-5.0.7.Final.jar\org.hibnerate\hibernate-mapping-3.0.dtd
+	    <hibernate-mapping>
+			<class name="com.ssh.bean.User" table="user">
+				<id name="id" column="id">
+					<!-- 配置主键的生成策略 -->
+					<generator class="native"></generator>
+				</id>
+				<property name="name" column="uname"></property>
+				<property name="money" column="money"></property>
+			</class>
+		</hibernate-mapping>
+		
+	**Hibernate-configuration约束：hibernate-core-5.0.7.Final.jar\org.hibnerate\hibernate-configuration-3.0.dtd
+		<hibernate-configuration>
+			<session-factory>
+				<!-- 连接数据库配置信息 -->
+				<property name="hibernate.connection.driver_class">com.mysql.jdbc.Driver</property>
+				<property name="hibernate.connection.url">jdbc:mysql://localhost:3306/shop</property>
+				<property name="hibernate.connection.username">root</property>
+				<property name="hibernate.connection.password">123</property>
+				
+				<!-- 配置hibernate自身的属性： 方言: 指定底层数据库的类型-->
+				<property name="hibernate.dialect">org.hibernate.dialect.MySQLDialect</property>
+				<property name="hibernate.show_sql">true</property>
+				<property name="hibernate.format_sql">true</property>
+				
+				<!-- 配置映射文件 -->
+				<mapping resource="com/ssh/bean/User.hbm.xml"/>
+			</session-factory>
+		</hibernate-configuration>
+		
+	使用最原始的方式开启事务执行数据库操作，切记提交事务，否则数据写入数据库可能不正常(即未写入)
+		public void save(User user) {
+			Configuration configuration = new Configuration();
+			configuration.configure();
+			SessionFactory sessionFactory = configuration.buildSessionFactory();
+			Session session = sessionFactory.openSession();
+			
+			Transaction transaction = session.beginTransaction();
+			System.out.println("UserDaoImpl的save方法执行了");
+			session.save(user);
+			
+			transaction.commit();
+			session.close();
+			sessionFactory.close();
+		}
+(3)由原始版本改为由Spring管理SessionFactory，保留hibernate.cfg.xml文件
+	**在spring-orm-4.2.9.RELEASE.jar/org.springframework.orm/hibernate5/LocalSessionFactoryBean下面可以找到该Spring类，其中的name属性为LocalSessionFactoryBean下面的configLocations参数，以下配置相当于读取配置文件并创建一个session工厂
+		<bean id="sessionFactory" class="org.springframework.orm.hibernate5.LocalSessionFactoryBean">
+			<property name="configLocations">
+				<value>classpath:hibernate.cfg.xml</value>
+			</property>
+		</bean>
+		
+	**并将其注入到UserDao：
+		<bean id="userDao" class="com.ssh.dao.impl.UserDaoImpl">
+			<property name="sessionFactory" ref="sessionFactory"></property>
+		</bean>
+(4)使用applicationContext.xml配置代替hibernate.cfg.xml配置，不使用hibernate.cfg.xml文件
+   在LocalSessionFactoryBean类里面有dataSource、hibernateProperties、mappingDirectoryLocations这三个属性
+	<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+		<property name="driverClass" value="com.mysql.jdbc.Driver"></property>
+		<property name="jdbcUrl" value="jdbc:mysql://localhost:3306/shop"></property>
+		<property name="user" value="root"></property>
+		<property name="password" value="123"></property>
+	</bean>
+ 	
+ 	<bean id="sessionFactory" class="org.springframework.orm.hibernate5.LocalSessionFactoryBean">
+		<!-- 核心配置 -->
+		<property name="dataSource" ref="dataSource"></property>
+		<!-- 可选配置 -->
+		<property name="hibernateProperties">
+			<props>
+				<prop key="hibernate.dialect">org.hibernate.dialect.MySQL5Dialect</prop>
+				<prop key="hibernate.hbm2ddl.auto">update</prop>
+				<prop key="hibernate.format_sql">true</prop>
+				<prop key="hibernate.show_sql">true</prop>
+			</props>
+		</property>
+		<!-- 映射文件导入 -->		
+		<property name="mappingDirectoryLocations">
+			<value>classpath:com/ssh/bean</value>
+		</property>
+	</bean>
+	
+	然后在UserDaoImpl声明sessionFactory并提供set方法
+	Spring当中的LocalSessionFactoryBean类的作用为将原来由Hibernate管理的sessionFactory接手过来自己管理，但是需要向其提供这3个东西：dataSource、hibernateProperties、mappingDirectoryLocations，通过这些对象与数据就可生成sessionFactory对象
+	
+(5)使用外置properties文件代替在applicationContext.xml配置数据库连接
+	properties文件配置：
+		jdbc.driverClass=com.mysql.jdbc.Driver
+		jdbc.jdbcUrl=jdbc:mysql:///shop
+		jdbc.user=root
+		jdbc.password=123
+		
+	applicationContext.xml配置：
+		-开启properties文件扫描-
+		<context:property-placeholder location="classpath:jdbc.properties"/>
+		-配置连接信息-
+		<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+			<property name="driverClass" value="${jdbc.driverClass}"></property>
+			<property name="jdbcUrl" value="${jdbc.jdbcUrl}"></property>
+			<property name="user" value="${jdbc.user}"></property>
+			<property name="password" value="${jdbc.password}"></property>
+		</bean>
+		
+(6)使用Hibernate模板来操作dao
+
+	导入tx约束：
+		xmlns:tx="http://www.springframework.org/schema/tx"
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd
+	
+	在applicationContext.xml文件配置事务管理器：
+		实例化一个事务管理器，在事务管理器里面注入dataSource
+		<bean id="transactionManager" class="org.springframework.orm.hibernate5.HibernateTransactionManager">
+			<property name="sessionFactory" ref="sessionFactory"></property>
+		</bean>
+		开启事务注解支持，并指定事务管理器
+		<tx:annotation-driven transaction-manager="transactionManager"/>
+	
+	dao层要继承HibernateDaoSupport这个类，然后通过HibernateTemplate(模板)操作数据库，删除sessionFactory的声明和set方法：
+	(删掉的原因在于HibernateDaoSupport的setSessionFactory的方法是用final修饰的，不允许重写)
+		public class UserDaoImpl extends HibernateDaoSupport implements UserDao{
+			public void save(User user) {
+				getHibernateTemplate().save(user);
+			}
+		}
+	特别提示：上面删除了userDao里面的sessionFactory的声明和set方法，但在配置userDao的bean时依旧给userDao注入了一个sessionFactory对象，这是为什么呢？原因在于这个注入并不是注入给userDao这个对象的，而是直接注入到userDao所继承的HibernateDaoSupport的对象里面，有了这个sessionFactory后HibernateDaoSupport才能向我们提供HibernateTemplate模板对象，因为HibernateTemplate模板对象的生成依赖于sessionFactory对象
+		<bean id="userDao" class="com.ssh.dao.impl.UserDaoImpl">
+			<property name="sessionFactory" ref="sessionFactory"></property>
+		</bean>
+	在业务逻辑层上打上事务注解代码，在service层开启了事务，由于事务默认设置的传播性，在service层调用dao层时会将dao层被调用的方法也纳入同一个同一个事务当中，这个事务内出现错误均会回滚，无论是在service层的该事务或者dao层的该事务出现的错误，前提是dao层继承了HibernateDaoSupport这个类，事务注解写在类或者方法上，例如类上：
+		@Transactional
+		public class UserServiceImpl implements UserService{
+			public void save(User user) {
+				userDao.save(user);
+				int i = 1/0;
+			}
+		}
+	HibernateDaoSupport利用传进来的sessionFactory对象生成一个hibernateTemplate模板对象，HibernateDaoSupport这个类就是管理hibernateTemplate模板对象的类，HibernateDaoSupport大致的功能有获取及设置hibernateTemplate模板对象、获取及设置sessionFactory对象以及获取当前的session等功能，继承这个类可以直接使用他的getHibernateTemplate()方法获取hibernateTemplate模板对象，这个模板对象里面含有一个sessionFactory的引用，该模板有众多的操作数据库的方法，无论是JdbcTemplate或者是HibernateTemplate，他们内部均封装了众多对数据库的操作方法，JdbcTemplate依赖于dataSource，而HibernateTemplate直接依赖于sessionFactory对象，并且sessionFactory又是基于dataSource的，所以他们最终都依赖于dataSource
+	
+异常：java.lang.ClassCastException: com.ch.hibernate.Department_$$_javassist_0 cannot be cast to javassist.util.proxy.Proxy
+解决办法：struts的jar包和hibernate的jar包中,都有一个javassist的jar包,将较低版本的删掉
+
+
+四、HibernateTemplate 懒加载的问题
+
+异常：could not initialize proxy - no Session
+
+原因：spring管理这个session，也是放置到Theradlocal里面去的。 只要在业务逻辑层提交了事务，那么session就关闭掉。所以使用懒加载就会有一个问题，当真正调用到查询的数据的时候就会无法查询，因为没有了session。 为了解决这个问题，我们需要在web.xml中配置一个过滤器，以便让session的关闭稍微推后、延迟点。
+
+	在web.xml里面添加一个配置，要在struts的过滤器之前添加 否则无效，例如下面访问延迟加载的load方法时需要在网址最后加上 .action
+      <filter>
+       <filter-name>Open</filter-name>
+       <filter-class>org.springframework.orm.hibernate5.support.OpenSessionInViewFilter</filter-class>
+      </filter>
+
+      <filter-mapping>
+       <filter-name>Open</filter-name>
+       <url-pattern>*.action</url-pattern>
+      </filter-mapping>

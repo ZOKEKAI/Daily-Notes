@@ -1,0 +1,73 @@
+1. 安装 Git		
+
+Debian系列：
+sudo apt install git
+
+RedHat系列：
+sudo yum install git
+
+Arch系列：
+sudo pacman install git
+
+Windows系列：略
+
+
+2.配置git账户信息（需要先注册git账号）
+
+git config --global user.name "Your Name"
+git config --global user.email "email@example.com"
+
+
+3.生成密钥
+
+ssh-keygen -t rsa -C "youremail@example.com"
+用记事本打开新生成的~/.ssh/id_rsa2.pub文件，将里面的内容添加到GitHub后台，多系统或者多台电脑可以新增多个SSH keys
+登录 GitHub，打开个人 Settings-->SSH keys-->Add SSH key，其中Title 随便写，Key 为粘贴之前复制的内容
+
+
+4.常用操作命令
+
+想要在一个目录下使用git命令进行各种操作，前提是要在这个目录下生成.git目录(git init命令),使当前目录成为工作空间。
+
+git clone https://github.com/ZOKEKAI/Java.git		//将远程库克隆到本地，然后再做修改
+
+mkdir learngit			//或者也可以直接创建文件夹然后再推送到远程
+cd learngit
+init					//初始化生成git管理版本库
+git add readme.txt		//将一个文件添加到仓库
+git add .				//将该文件夹里面的所有文件添加到仓库
+git commit -m "每次修改的说明内容"		//一次性提交前面所有的add操作，并添加每次操作的说明
+git status				//查看当前有没有未提交的修改
+git remote add origin https://github.com/ZOKEKAI/Java.git		//关联到远程库
+git push -u origin master		//把本地库的内容推送到远程库.
+git push				//没有其他追踪分支时可以简写成这样
+
+操作本地分支：
+git branch dev			//在本地创建新分支
+git checkout dev 		//切换到本地的dev分支
+git checkout -b dev		//创建和切换一步完成
+git branch				//查看本地所有分支
+git branch -d dev		//删除本地的dev分支
+git log					//查看log，按q退出log模式
+git rm 文件名(包括路径) 	//从git中删除指定文件
+
+操作远程分支：
+git pull				//从其他的版本库（既可以是远程的也可以是本地的）将代码更新到本地，让本地代码与服务器代码同步
+git branch -r			//查看远程分支
+git branch test --> git push origin test		//新建本地分支，然后推送到远程，相当于在远程新建了test分支，多人开发在分支上操作可以用这个方法
+git push origin :test	//删除远程tsst分支，冒号前面的空格不能少，原理是把一个空分支push到server上，相当于删除该分支
+git push origin --delete test 	//删除远程tsst分支
+git branch –set-upstream dev origin/dev			//指定本地dev分支与远程origin/dev分支的链接，将其链接起来
+
+分支合并操作：
+首先切换到master分支：git checkout master，然后执行合并操作：git merge develop		//git merge命令用于合并指定分支到当前分支
+
+---------------------------------------------------------------------------------------
+多人协作的工作模式通常是这样：															
+首先，可以试图用git push origin branch-name推送自己的修改；
+如果推送失败，则因为远程分支比你的本地更新，需要先用git pull试图合并；
+如果合并有冲突，则解决冲突，并在本地提交；
+没有冲突或者解决掉冲突后，再用git push origin branch-name推送就能成功！
+如果git pull提示“no tracking information”，则说明本地分支和远程分支的链接关系没有创建，
+用命令git branch –set-upstream branch-name origin/branch-name创建链接关系
+---------------------------------------------------------------------------------------

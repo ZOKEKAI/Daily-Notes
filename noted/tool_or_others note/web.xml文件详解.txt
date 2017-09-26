@@ -1,0 +1,19 @@
+<servlet>
+ <servlet-name>snoop</servlet-name>  //指定servlet的名称为snoop
+ <servlet-class>com.serv.SnoopServlet</servlet-class> //指定servlet的类的全名，运行后会去找SnoopServlet.class
+ <init-param>
+ //用来定义参数，web程序启动时加载，在servlet类中通过getInitParamenter(String name)方法访问初始化参数
+     <param-name>foo</param-name>
+     <param-value>bar</param-value>
+ </init-param>
+ <load-on-startup>1</load-on-startup>
+//指定当Web应用启动时，装载servlet的次序。当值为正数或零时：Servlet容器先加载数值小的servlet，再依次加载其他数值大的servlet。当值为负或未定义：Servlet容器将在Web客户在第一次请求时创建该servlet。
+</servlet>
+<servlet-mapping> //用来定义servlet所对应的URL，包含两个子元素
+ <servlet-name>snoop</servlet-name>	//指定servlet的名称为snoop，用于辨识上面名字一样的servlet，从而运行程序
+ <url-pattern>/snoop</url-pattern> //指定servlet所对应的URL，也就是网址输入的后面那部分地址
+ //form表单里面要填的内容为: "/你的项目名/snoop"
+</servlet-mapping>
+
+Web容器加载顺序ServletContext--context-param--listener--filter--servlet
+一个<Context-param>里面只能有一个<param-name>和一个<param-value>，并且和<servlet>同级

@@ -1,0 +1,144 @@
+1、in 等于 =any
+
+2、not in 等于 <>all
+
+3、查询员工姓名,员工部门名称
+select ename,(select dname from dept d where d.deptno = e.deptno) from emp e;
+
+4、exists(select查询语句) : 存在，如果查询语句有结果,则返回true,否则返回false(exists 可以和 in 等价使用)
+返回false时查询的结果为空，即如果括号里面的值为true才进行比较并记录，如果为false则跳过
+
+5、查询有员工的部门信息
+select * from dept d where exists(select * from emp e where e.deptno = d.deptno);
+
+6、查询员工表中工资最高的前三名(rownum : 表示的是行号,每输出一条记录,就在前面添加一个行号, rownum++)
+select rownum,e.* from (select * from EMP order by SAL desc) e where rownum<4;
+[使用rownum之前需要先用子查询进行排序，如果直接将rownum放到子查询语句里面会造成结果为空或者排序错乱]
+结果为空：
+	-- 查询rownum >= 3 所有记录(每执行一遍语句就会对该产生的行进行编号，从1开始，1永远都不大于3，所以为空)
+	select rownum,emp.* from emp where rownum >= 3;
+排序错乱：
+	-- 查询rownum < 4 所有记录(因为每执行一遍该语句就会添加一个行号，无法对结果进行排序)
+	select rownum,emp.* from emp where rownum <4 ORDER by SAL DESC;
+	
+7、找到员工表中薪水大于本部门平均薪水的员工(子查询结果为多列的情况)
+	select * 
+	from
+	   emp e,
+	   (select deptno,avg(sal) avgsal from emp group by deptno) t
+	where e.deptno = t.deptno and e.sal > t.avgsal; 
+	
+8、统计EMP表每年入职员工的个数，并将年份由原来的纵向递增排列改为横向递增排列
+
+(1)以年份分组，查询出每年入职员工的个数
+	select TO_CHAR(hiredate,'yyyy') yy,count(*) cc from emp group by TO_CHAR(hiredate,'yyyy') order by yy;
+	
+(2)先将第一个年份1980竖起来，将该年份入职的人数放到原来1980的位置，切记给列起别名时要使用双引号引起来
+	select CASE yy when '1980' then cc end "1980"
+		from 
+	(select TO_CHAR(hiredate,'yyyy') yy,count(*) cc from emp group by TO_CHAR(hiredate,'yyyy') order by yy);
+	
+(3)经过第二步查询，此时除了第一行以及列名，其他行均为null，使用max去除这些null
+	select max(CASE yy when '1980' then cc end) "1980"
+		from 
+	(select TO_CHAR(hiredate,'yyyy') yy,count(*) cc from emp group by TO_CHAR(hiredate,'yyyy') order by yy);
+	
+(4)参照第三步，添加其他年份的列，以及这些年份入职的人数
+	select 
+		(max(CASE yy when '1980' then cc end)) "1980",
+		(max(CASE yy when '1981' then cc end)) "1981",
+		(max(CASE yy when '1982' then cc end)) "1982",
+		(max(CASE yy when '1987' then cc end)) "1987"
+			from 
+	(select TO_CHAR(hiredate,'yyyy') yy,count(*) cc from emp group by TO_CHAR(hiredate,'yyyy') order by yy);
+	
+(5)最后，增加一个总数统计列"TOTAL"(注意：sum(cc)操作的表依旧是第一步(1)产生的表，而不是第四步(4)产生的表，所以可用sum(cc))
+	select 
+		sum(cc) "TOTAL",
+		(max(CASE yy when '1980' then cc end)) "1980",
+		(max(CASE yy when '1981' then cc end)) "1981",
+		(max(CASE yy when '1982' then cc end)) "1982",
+		(max(CASE yy when '1987' then cc end)) "1987"
+			from 
+	(select TO_CHAR(hiredate,'yyyy') yy,count(*) cc from emp group by TO_CHAR(hiredate,'yyyy') order by yy);
+	
+9、分页查询，查询第5-10条记录
+
+<1>子查询的rownum<=10表示查询emp表的前10条记录
+<2>子查询的rownum line表示依次给这10行数据添加行号，行号从1开始，为了便于区分，给该列取别名为line
+<3>line>=5表示将这10条记录里面line大于等于5的行取出来
+
+select * from (select rownum line,emp.* from emp where rownum<=10) where line>=5;
+
+10、删除表中重复的记录 ,只保留rowid最小的那行记录
+
+(1)select name,min(rowid) from haha group by name;
+(错误写法：select rowid,name from haha group by name; rowid有多行，且每行都不一样，所以要么只显示最大最小值，要么不显示)
+
+(2)delete from haha where rowid not in (select min(rowid) from haha group by name);
+(not in后面的括号里面只能含有一列，即rowid这一列，对应的是where后面的哪个列)
+
+11、牛和鸡若干, 总共有3个头,8条腿，求鸡的数量和牛的数量
+
+	select niu 牛,ji 鸡
+		from 
+	(select rownum niu from emp) tabniu,
+	(select rownum ji from emp) tabji
+		where 
+	 niu + ji = 3 and 4*niu + 2*ji = 8; 
+	 
+12、集合运算
+	
+	并集(等同于OR)[工资大于1500,或者20号部门下的员工]：
+	select * from emp where sal > 1500 union select * from emp where deptno = 20; (会自动去掉重复的行)
+	select * from emp where sal > 1500 union all select * from emp where deptno = 20; (保留重复的行)
+	
+	交集(两张表都存在)[工资大于1500,并且20号部门下的员工]：
+	select * from emp where sal > 1500 intersect select * from emp where deptno = 20;
+	
+	差集(属于A表，但不属于B表)[工资大于1500,并且不是20号部门下的员工]：
+	select * from emp where sal > 1500 minus select * from emp where deptno = 20;
+	
+	集合注意事项：
+	(1)列的数量要一致，如果不一致可以手动添加列(select ename,sal from emp union select job,null from emp)
+	(2)列的数据类型要一致
+	(3)合并列的列名可以不一致,但是意义要相似
+	
+	
+课后作业：
+
+(1)统计每个部门的平均服务期限(months_between：返回两个日期之间的月份数，ceil：返回大于或者等于指定表达式的最小整数)
+select deptno, avg(ceil(months_between(sysdate, hiredate)/12)) from emp group by deptno;
+
+(2)列出各个部门的MANAGER 的最低薪金
+select deptno, min(sal) from emp where job = 'MANAGER' group by deptno;
+
+(3)给任职日期超过10年的人加薪10%；
+update emp set sal = sal * 1.1 where months_between(sysdate,hiredate)/12 > 10;
+
+(4)查询出不是领导的员工(先查询出管理者的编号，然后empno不在该编号范围内的员工即不是领导)
+select * from emp where empno <>all (select mgr from emp where mgr is not null)
+
+(5)查询出有员工的部门【数据量大的时候用exists效率非常高】
+(exists后面括号的内容返回的是boolean值，非空则返回true，才会列出dept表中非空的该行)
+select * from dept d where exists(select * from emp e where d.deptno=e.deptno);
+
+(6)统计薪资大于薪资最高的员工所在部门的平均工资和薪资最低的员工所在部门的平均工资的平均工资的员工信息。
+select * from emp where sal >  (select 
+            (
+              (select avg(sal) from emp where deptno = ( select deptno from emp where sal = (select max(sal)  from emp)))
+              +
+              (select avg(sal) from emp where deptno = (select deptno from emp where sal = ( select min(sal) from emp)))            
+            )/2
+     from dual);
+	 
+(7)查询部门名称不是RESEARCH,职位是MANAGER,且薪资大于平均薪资的员工(包含ename hiredate loc三个字段)
+["!="：在此处字符串可用：dname != 'RESEARCH'(正确写法)，但员工奖金不可用：comm != null(错误写法)，number数据类型不能用null判断]
+
+select *
+from 
+    emp
+where
+    job = 'MANAGER'
+    and sal > (select avg(sal) from emp)
+    and deptno in (select deptno from dept where dname != 'RESEARCH');

@@ -1,0 +1,190 @@
+1、新建bean对象User
+	private Long user_id;		//用户id
+	private String user_code; 	//账号
+	private String user_name; 	//昵称、姓名
+	private String user_password; //密码
+	private int user_state; 	//用户状态  1：正常使用  0 ： 停止使用 
+
+2、编写映射文件(由于User对象的属性与数据库的列名相同，所以不需要写column)
+	<hibernate-mapping>
+    	<class name="com.itheima.bean.User" table="user">
+    		<id name="user_id">
+    			<generator class="native"></generator>
+    		</id>
+    		<property name="user_code"></property>
+    		<property name="user_name"></property>
+    		<property name="user_password"></property>
+    		<property name="user_state"></property>
+    	</class>
+    </hibernate-mapping>
+	
+3、开启注解以及事务相关注意事项
+(1)@RunWith(SpringJUnit4ClassRunner.class)依赖于@Test的jar包,要先导入@Test的jar包@RunWith才会有提示
+(2)导入Spring的test包后使用如下两行注解开启Spring的测试功能
+	@RunWith(SpringJUnit4ClassRunner.class)
+	@ContextConfiguration("classpath:applicationContext.xml")
+	
+4、登陆页面显示错误信息(注意显示属性：VISIBILITY: visible)
+
+	在Action类里面加入如下代码：
+	addFieldError("result", "用户名或者密码错误!");
+	
+	在JSP页面使用如下代码取值：
+		${fieldErrors.result[0]}	
+		或者：
+		<s:fielderror>
+			<s:param>result</s:param>
+		</s:fielderror>
+		
+5、创建字典表与客户表的一对多关系 
+	
+	建立字典表实体对象
+	private String dict_id;
+	private String dict_type_code;
+	private String dict_type_name;
+	private String dict_item_name;
+	private String dict_item_code;
+	private int dict_sort;
+	private int dict_enable;
+	private String dict_memo;
+	
+	建立字典表映射关系文件(特别注意：property里面不能再写dict_id，否则报错(should be mapped with insert="false" update="false"))
+	<hibernate-mapping>
+		<class name="com.itheima.bean.BaseDict" table="base_dict">
+			<id name="dict_id" column="dict_id">
+				<generator class="native"></generator>
+			</id>
+			<property name="dict_type_code"></property>
+			<property name="dict_type_name"></property>
+			<property name="dict_item_name"></property>
+			<property name="dict_item_code"></property>
+			<property name="dict_sort"></property>
+			<property name="dict_enable"></property>
+			<property name="dict_memo"></property>
+		</class>
+	</hibernate-mapping>
+	
+	创建Customer客户表实体对象
+	private Long cust_id;
+	private String cust_name;
+	private String cust_phone;
+	private String cust_address;
+	private BaseDict cust_source;  	//表示这个客户属于什么客户来源
+	private BaseDict cust_industry;	//客户属于什么行业
+	private BaseDict cust_level; 	//客户级别
+	
+	建立客户表映射关系文件(维护多对一关系)
+	<hibernate-mapping>
+		<class name="com.itheima.bean.Customer" table="cst_customer">
+			<id name="cust_id">
+				<generator class="native"></generator>
+			</id>
+			<property name="cust_name"></property>
+			<property name="cust_phone"></property>
+			<property name="cust_address"></property>
+			
+			<many-to-one name="cust_source" class="com.itheima.bean.BaseDict"></many-to-one>
+			<many-to-one name="cust_industry" class="com.itheima.bean.BaseDict"></many-to-one>
+			<many-to-one name="cust_level" class="com.itheima.bean.BaseDict"></many-to-one>
+		</class>
+	</hibernate-mapping>
+
+6、添加客户时动态显示下拉选项(从数据库获取选项)
+
+	**JSP部分(cust_industry.dict_id：cust_industry对象的id)：
+	
+		导入jquery文件
+		
+		表单：
+		<td>所属行业 ：</td>
+		<td>
+			<select name="cust_industry.dict_id" class=textbox id="cust_industry" style="WIDTH: 180px;height: 21px">
+				<option value="">--请选择--</option>
+			</select>
+		</td>
+		<td>信息来源 ：</td>
+		<td>
+			<select name="cust_source.dict_id" class=textbox id="cust_source" style="WIDTH: 180px;height: 21px">
+				<option value="">--请选择--</option>
+			</select>
+		</td>
+		<td>客户级别：</td>
+		<td>
+			<select name="cust_level.dict_id" class=textbox id="cust_level" style="WIDTH: 180px;height: 21px">
+				<option value="">--请选择--</option>
+			</select>								
+		</td>
+		
+		使用Ajax从后台获取动态数据：
+		function loadDict(type_code , tag_id){
+			var url = "${pageContext.request.contextPath}/baseDict_findByAjax";
+			$.post(url ,{dict_type_code:type_code} , function(result){
+				//遍历这个result ，这个result其实就是一个集合 、 数组 、 遍历一次，就得到一个字典对象
+				$(result).each(function(i , n){ // 遍历一次，执行一次function,  i: 索引 ， n: 遍历得到的对象，字典对象
+					//动态往标签添加内容。
+					$(tag_id).append("<option value='"+n.dict_id+"'>"+n.dict_item_name+"</option>");
+				});
+			} , "json");
+		}
+		$(function(){
+			loadDict("001" , "#cust_industry"); //所属行业
+			loadDict("002" , "#cust_source");//客户来源
+			loadDict("006" , "#cust_level"); //客户级别
+		})	
+		
+	**BaseDictAction部分的代码：
+	
+		public class BaseDictAction extends ActionSupport{
+		++该属性由struts2框架赋值，必须提供set方法作为赋值入口
+		private String dict_type_code;
+		public void setDict_type_code(String dict_type_code) {
+			this.dict_type_code = dict_type_code;
+		}
+		++该baseDictService对象由Spring框架赋值，同样需要提供set方法作为入口
+		private BaseDictService baseDictService;
+		public void setBaseDictService(BaseDictService baseDictService) {
+			this.baseDictService = baseDictService;
+		}
+		++声明list集合用于存储从数据库查询到的BaseDict对象集合
+		++Struts2框架会将该存了BaseDict对象的list集合放入值栈里面去，所以必须提供get方法作为入口(切记，不是set方法)
+		List<BaseDict> list;
+		public List<BaseDict> getList() {
+			return list;
+		}
+		public String findByAjax() throws IOException {
+			list = baseDictService.findByTypeCode(dict_type_code);
+			return Constant.JSON_SUCCESS;
+		}
+	}
+	
+	**struts.xml部分配置(list为BaseDictAction里面的list集合，名字必须一致)
+	
+		<package name="baseDict" extends="json-default" namespace="/">
+			<action name="baseDict_*" class="baseDictAction" method="{1}">
+				<result name="json_success" type="json">
+					<param name="root">list</param>
+				</result>
+			</action>
+		</package>
+	
+	**applicationContext.xml部分配置
+	
+		<!-- 字典部分 -->
+		++baseDictAction对象必须配置为多例scope="prototype"模式，否则每次list都取不到完整的值
+		<bean name="baseDictAction" class="com.itheima.web.action.BaseDictAction" scope="prototype">
+			<property name="baseDictService" ref="baseDictService"></property>
+		</bean>
+		
+		<bean name="baseDictService" class="com.itheima.service.impl.BaseDictServiceImpl">
+			<property name="baseDictDao" ref="baseDictDao"></property>
+		</bean>
+		
+		<bean name="baseDictDao" class="com.itheima.dao.impl.BaseDictDaoImpl">
+			<property name="sessionFactory" ref="sessionFactory"></property>
+		</bean>
+		
+7、保存客户时JSP页面的三个下拉框的name应命名为如下所示(因为Customer对象里面的这三个属性为字典类型的对象)：
+	
+	cust_level.dict_id
+	cust_source.dict_id
+	cust_industry.dict_id

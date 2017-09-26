@@ -1,0 +1,136 @@
+1、使用AOP注解方式进行织入
+	(1)导包
+		四个核心包：
+			spring-beans-4.3.10.RELEASE.jar 
+			spring-context-4.3.10.RELEASE.jar 
+			spring-core-4.3.10.RELEASE.jar 
+			spring-expression-4.3.10.RELEASE.jar
+		aop联盟包:	aopalliance-1.0.jar
+		aspectj实现包:	aspectjweaver-1.8.9.jar
+		spring 的实现包:	spring-aspects-4.2.9.RELEASE.jar
+		spring-aop包:	spring-aop-4.2.9.RELEASE.jar
+	以及slf4j日志框架包
+	(2)在applicationContext.xml里面导入aop约束
+	(3)在applicationContext.xml里面配置两个bean标签
+	分别是用于增强别的类的工具类(例如：Logger类)和被增强的类(例如：SriviceImpl类)
+	(4)在Logger类上面加上@aspect，并且在Logger类里面用于增强别的类的方法前面写上
+		@Before("execution (* com.itheima.service.*.*(..))")
+	(5)切记在applicationContext.xml配置文件上配置开启注解开关：
+		<aop:aspectj-autoproxy/>
+		
+2、JDBC模板
+	(1)导包
+		spring-jdbc-xx.jar
+		spring-tx-xxx.jar
+		mysql-connector-xxx.jar
+	(2)JdbcTemplate用法和DBUtils的querunner用法一样
+	
+3、使用XML配置方式将dataSource注入JdbcTemplate，然后将JdbcTemplate注入userDaoImpl，最后将userDaoImpl注入到userServiceImpl中，注意在userDaoImpl中要声明JdbcTemplate对象，而userServiceImpl要声明userDaoImpl对象，以及均要提供set方法。
+	<bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+		<property name="driverClassName" value="com.mysql.jdbc.Driver"></property>
+		<property name="url" value="jdbc:mysql:///shop"></property>
+		<property name="username" value="root"></property>
+		<property name="password" value="123"></property>
+	</bean>
+	
+	<bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource" ref="dataSource"></property>
+	</bean>
+	
+	<bean id="userDaoImpl" class="com.itheima.dao.impl.UserDaoImpl">
+		<property name="jdbcTemplate" ref="jdbcTemplate"></property>
+	</bean>
+	
+	<bean id="userServiceImpl" class="com.itheima.service.impl.UserServiceImpl">
+		<property name="userDaoImpl" ref="userDaoImpl"></property>
+	</bean>
+	
+4、使用C3P0代替原来的dataSource
+(1)导入jar包：
+	c3p0-0.9.5.2.jar
+	mchange-commons-java-0.2.12.jar
+(2)将上面那4个bean中的dataSource哪个bean改为如下所示(注意name属性的值改为和c3p0的xml配置文件一致的值)：
+	<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+		<property name="driverClass" value="com.mysql.jdbc.Driver"></property>
+		<property name="jdbcUrl" value="jdbc:mysql:///shop"></property>
+		<property name="user" value="root"></property>
+		<property name="password" value="123"></property>
+	</bean>
+该class的全限定名可以在任意类的方法下打上ComboPooledDataSource即会提示导包，即可获得全限定名
+	
+	
+5、Spring事务的管理接口为：PlatformTrasactionManager
+
+	jdbc | mybatis 事务管理器类： DataSourceTransactionManager
+	hibernate 事务管理器类：  HibernateTransactionManager
+	
+6、使用编码式实现事务功能
+
+(1)DataSourceTransactionManager该事务管理器需要一个连接源，因为事务开启关闭终归还是通过Connection对象,所以需要给该管理器类提供一个连接源
+(2)在执行事务时JdbcTemplate必须是同一个，否则会出现回滚失效，没有达到预期效果，确保JdbcTemplate同一个的方式有多种，可以使用原始的通过方法参数传递JdbcTemplate或者ThreadLocal等方式，需要使用事务运行的业务代码放到TransactionTemplate对象的doInTransaction方法中运行即可，不需要自己手动try-catch，代码如下：
+	
+	public void transfer() {
+		
+		ApplicationContext context = new ClassPathXmlApplicationContext("applicationContext.xml");
+		DataSource dataSource = (DataSource) context.getBean("dataSource");
+		
+		DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
+		
+		TransactionTemplate transactionTemplate = new TransactionTemplate();
+		transactionTemplate.setTransactionManager(transactionManager);
+		
+		final JdbcTemplate jdbcTemplate2 = new JdbcTemplate();
+	    jdbcTemplate2.setDataSource(dataSource);
+		
+		transactionTemplate.execute(new TransactionCallback<Object>() {
+
+			@Override
+			public Object doInTransaction(TransactionStatus arg0) {
+				
+				userDaoImpl.decreaMoney(1000,1,jdbcTemplate2);
+				int i = 1/0;
+				userDaoImpl.increaMoney(1000,2,jdbcTemplate2);
+					
+				return null;
+			}
+		});
+		
+		((AbstractApplicationContext)context).close();
+	}
+
+7、XML配置方式实现事务功能
+	在applicationContext.xml里面配置：
+	获取事务管理器，并将连接源dataSource注入transManager里面
+	 <bean id="transManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource"></property>
+	</bean>
+	指定哪个方法使用事务，事务管理器为上面新建的transManager
+	<tx:advice id="advice" transaction-manager="transManager">
+		<tx:attributes>
+			<tx:method name="*"/>
+		</tx:attributes>
+	</tx:advice>
+	指定事务使用的范围，仅仅是范围，并没有指定哪些方法使用事务，所以需要配置上面的tx:advice标签
+	<aop:config>
+		<aop:pointcut expression="execution(* com.itheima.service.impl.*.*(..))" id="pointCut"/>
+		<aop:advisor advice-ref="advice" pointcut-ref="pointCut"/>
+	</aop:config>
+	
+	service层按照正常的写法(具体类为：com.itheima.service.impl.UserServiceImpl.transfer())：
+	public void transfer() {
+		userDaoImpl.decreaMoney(1000,1);
+		int i = 1/0;
+		userDaoImpl.increaMoney(1000,2);
+	}
+	dao层使用注入的jdbcTemplate即可
+	
+8、使用注解方式实现事务管理
+(1)导入tx约束
+(2)配置applicationContext.xml文件(不需要tx:advice和aop:config标签):
+	<!-- 1. 配置事务管理者 -->
+	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource"></property>
+	</bean>
+	<!-- 等同于开关，其实就是用于指定了在代码里面声明的那些事务的注解，使用什么管理者 -->
+	<tx:annotation-driven transaction-manager="transactionManager"/>
+(3)在类上或者方法上面写上注解代码： @Transactional 即可对该方法或者该类使用事务

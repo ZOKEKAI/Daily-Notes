@@ -1,0 +1,193 @@
+1、多选删除商品部分
+
+--product_list.jsp：
+为了能够将选中的商品传递到服务器，需要为每一行添加一个复选框，并将这些行放到一个form表单里面
+增加复选框代码如下：
+<td><input type="checkbox" class="one" name="pid" value="${p.pid }"/></td>
+增加form表单代码如下(切记表单里面还需要有一个隐藏字段，以便让服务器知道要调用哪个方法)：
+<form id="formId" action="${pageContext.request.contextPath }/productServlet" method="post">
+<input type="hidden" name="method" value="deleteChecked"/>
+在外面绑定form表单代码如下(将form表单绑定到id为btn1的按钮上)：
+	//在表单外面给表单绑定事件的方式
+	$("#btn1").click(function(){
+		//提交 (表单)
+		$("#formId").submit();
+	});
+	
+--ProductService.java：
+因为该操作涉及到多个pid，在dao层需要执行多条sql语句，需要开启事务，需要用到ThreadLocal
+ConnectionManager.getConnectionByThread();	//从存放线程局部变量的方法ThreadLocal取得连接对象
+connection.setAutoCommit(false);			//放在调用完dao层方法之前
+connection.commit();						//放在调用完dao层方法之后
+connection.rollback();						//放在catch块里面，出现异常后回滚操作
+
+--ProductDao:
+在dao层用for循环执行语句
+for (String pid : pids) {
+	String sql = "delete from product where pid=?";
+	queryRunner.update(ConnectionManager.getConnectionByThread(), sql, pid);
+}
+
+
+2、多条件搜索部分
+
+--ProductServlet.java
+直接将从jsp页面获取到的查询条件pname和key发送到下一层，不需要封装
+在从数据库获取到查询结果后将结果返回给jsp页面，使用的依旧是商品的展示页面，所以要求存到request里面的该集合的名字和之前的一样
+
+--ProductDao.java
+	QueryRunner queryRunner = new QueryRunner(C3P0Util.ds);
+	String sql = "select * from product where 1=1";
+		
+	//该List集合保存的是问号所代表的内容，而不是整条sql语句，使用集合的原因是一开始不用明确集合的长度
+	而如果使用Object[] params数组要求有固定的元素，但是搜索内容不确定，所以不能用数组，转而用集合代替
+	List<Object> params = new ArrayList<Object>();
+	//切记去除用户输入内容的前后空格，还可以避免用户只输入几个空格的情况，留意and前面需要空格
+	if(pname!=null&&pname.trim().length()>0){
+		sql+=" and pname like ?";
+		params.add("%"+pname+"%");
+	}
+	if(key!=null&&key.trim().length()>0){
+		sql+=" and pdesc like ?";
+		params.add("%"+key+"%");
+	}
+	//因为queryRunner.query方法的参数接收的是数组而不能接收集合，切记要使用toArray()方法将集合转换为数组
+	List<Product> products = queryRunner.query(sql, new BeanListHandler<Product>(Product.class), params.toArray());
+	return products;
+
+	
+3、分页搜索部分
+
+--ProductService.java
+	public PageBean findByPage(int curPage) throws SQLException {
+		//以下的5条数据为PageBean类定义的5个属性，属性可以根据实际需求定义，也可定义为泛型类，用于接收各种类型的数据，
+		该类的作用：当做数据存储的容器，将数据封装起来后方便于数据在各层之间的传递，该类的数据来源于页面、数据库以及开发者自定义
+		ProductDao productdao = new ProductDao();
+		PageBean pageBean = new PageBean();
+		//设置一页显示的商品数量，可以自定义，可以使用一个类来专门存放这个数，便于以后修改，只需要改一处地方
+		pageBean.setCurSize(6);
+		//数据库信息总数量，使用"select count(*) from product"语句
+		int count = productdao.selectCount();
+		pageBean.setCount(count);
+		//总页码
+		int countPage;
+		if(count%6!=0){
+			countPage = count/6+1;
+		}else{
+			countPage = count/6;
+		}
+		pageBean.setSumPage(countPage);
+		//当前页码，该页码在页面访问时传递过来
+		pageBean.setCurPage(curPage);
+		//商品信息，b为每页显示数量，a表示从第几条数据开始，a的索引从0开始
+		int b  = 6;
+		int a  = (curPage -1)*b;
+		List<Product> list = productdao.findByPage(a,b);
+		pageBean.setList(list);
+		return pageBean;
+	}
+	
+--Constant.java
+	该类用来专门存放数值，便于以后修改，只需要改这一处地方
+	public class Constant {
+		//Ctrl+Shift+X:变大写
+		//Ctrl+Shift+y:变小写
+		public static int CUR_SIZE = 3; 
+	}
+	
+--ProductDao.java
+	查询数据库数据总量，该方法返回的是Object类型数据，但实际上它是个Long(包装类)类型，可以强转为Long类型
+	包装类Long和基本数据类型long不同之处在于包装类有一套包装类方法，而基本数据类型没有方法功能。
+	Long n = (Long) queryRunner.query(sql, new ScalarHandler());
+	//可以使用Long自带的方法转换为int类型
+	int m = n.intValue();
+	
+	分页查询dao层代码，a和b由service层计算并传递到dao层
+	public List<Product> findByPage(int a, int b) throws SQLException {
+		QueryRunner queryRunner = new QueryRunner(C3P0Util.ds);
+		String sql = "select * from product limit ?,?";
+		Object[] params = {a,b};
+		List<Product> list = queryRunner.query(sql, new BeanListHandler<Product>(Product.class), params);
+		return list;
+	}
+	
+
+4、分页搜索JSP页面部分
+	--搜索条件输入框部分：
+		<td colspan="7">
+			<form action="${pageContext.request.contextPath }/productServlet" method="post">
+				<input type="hidden" name="method" value="findByConditions"/>
+				商品名:<input type="text" name="pname"/>
+				关键词:<input type="text" name="key"/>
+				<input type="submit" value="查找"/>
+			</form>
+		</td>
+		
+	--网页页数显示部分：
+		<tr>
+			<td colspan="8" align="center">
+				<c:if test="${page.curPage!=1 }">
+					<a href="${pageContext.request.contextPath }/productServlet?method=findByPage&curPage=1">首页</a>
+					<a href="${pageContext.request.contextPath }/productServlet?method=findByPage&curPage=${page.curPage-1}">上一页</a>
+				</c:if>
+				<c:forEach begin="1" end="${page.sumPage }" var="n">
+					<c:if test="${page.curPage != n }">
+						<a href="${pageContext.request.contextPath }/productServlet?method=findByPage&curPage=${n}">${n }</a>
+					</c:if>
+					<c:if test="${page.curPage == n }">
+						${n }
+					</c:if>
+				</c:forEach>
+				<c:if test="${page.curPage!=page.sumPage }">
+					<a href="${pageContext.request.contextPath }/productServlet?method=findByPage&curPage=${page.curPage+1}">下一页</a>
+					<a href="${pageContext.request.contextPath }/productServlet?method=findByPage&curPage=${page.sumPage}">尾页</a>
+				</c:if>
+			</td>
+		</tr>
+		
+		
+5、泛型PageBean类
+该PageBean类是一个泛型类，也就意味着该类只有在程序运行时才确定具体类型，由于该类具有这个特点所以可以应用于多种场合，增强了复用性
+public class PageBean<T> {
+	//商品信息
+	private List<Object> list;
+	//当前页码
+	private int curPage;
+	//总页码 
+	private int sumPage;
+	//总数量
+	private int count;
+	//一页显示的数量
+	private int curSize;
+	
+	public List<Object> getList() {
+		return list;
+	}
+	public void setList(List<Object> list) {
+		this.list = list;
+	}
+	public int getCurPage() {
+		return curPage;
+	}
+	public void setCurPage(int curPage) {
+		this.curPage = curPage;
+	}
+	public int getSumPage() {
+		return sumPage;
+	}
+	public void setSumPage(int sumPage) {
+		this.sumPage = sumPage;
+	}
+	public int getCount() {
+		return count;
+	}
+	public void setCount(int count) {
+		this.count = count;
+	}
+	public int getCurSize() {
+		return curSize;
+	}
+	public void setCurSize(int curSize) {
+		this.curSize = curSize;
+	}
+}

@@ -1,0 +1,84 @@
+一、Emacs基本操作
+
+Ctrl-f    右移一个字符
+Ctrl-b    左移一个字符
+
+Alt-f     右移一个词
+Alt-b     左移一个词
+
+Ctrl-n    移到下一行
+Ctrl-p    移到上一行
+
+Ctrl-g    取消操作指令
+
+Ctrl-x Ctrl-f   找到并打开多个文件，Ctrl-x Ctrl-b 列出缓冲区，Ctrl-x 1 离开缓冲区列表
+
+Ctrl-x Ctrl-s   保存当前文件(相当于Ctrl+S)
+Ctrl-x s        保存全部缓冲区
+
+Ctrl-x k enter  关闭当前界面回到主界面
+
+Ctrl-x Ctrl-c   保存并退出Emacs
+
+Ctrl-s     向前搜索
+Ctrl-r     向后搜索
+
+Ctrl-a     移动到行首
+Ctrl-e     移动到行尾
+
+Alt-a      移动到句首
+Alt-e      移动到句尾
+
+Shift-<    移到本快速指南的最开始
+Shift->    移到本快速指南的最末尾
+
+Ctrl-u 8 Ctrl-f   向前移动 8 个字符
+Alt-8-f           向前移动 8 个字符
+Ctrl-u 8 Ctrl-v   将文本向下滚动 8 行，而光标不变
+
+Ctrl-u 8 @    插入8个@
+
+Backspace        删除光标前的一个字符
+Ctrl-d           删除光标后的一个字符
+Alt-Backspace    移除光标前的一个词
+Alt-d            移除光标后的一个词
+Ctrl-k           移除从光标到“行尾”间的字符
+Alt-k            移除从光标到“句尾”间的字符
+
+Ctrl-k   移动光标到一非空白行的行头,输入这个命令，移除那一行上的文字
+Ctrl-u 2 Ctrl-k 把两行以及它们的换行符移除
+
+Ctrl-y      将Ctrl-k删除的文字召回(可用于复制功能)
+
+Ctrl-/      会撤销一个命令所造成的所有改变(相当于Ctrl+Z)
+
+Alt-x recover file <Return>    恢复你的自动保存文件，确认请输入 yes<Return>
+
+Ctrl-x 2    将屏幕划分成两个窗格
+
+
+--------------窗口界面设置------------------
+
+(set-foreground-color "grey")
+(set-background-color "black")
+(set-cursor-color "gold1")
+(set-mouse-color "gold1")
+
+
+
+
+二、Emacs编写一个C程序
+
+1.C-x,C-f找到文件或新建文件，然后编写程序hello.c
+
+2.保存所编写的程序，命令是C-x,C-s
+
+3.编译程序，命令Alt-x shell，然后gcc -Wall -o hello hello.c进行编译
+
+4.运行程序：./hello 
+
+5.切换回刚才那个hello.c编辑区,输入c-x b "hello.c"
+
+
+shell模式下删除a.c文件： rm -f /Desktop/space/a.c
+shell模式下删除space目录：rm -rf /Desktop/space

@@ -1,0 +1,143 @@
+1、combobox输入框默认提供搜索功能，默认为local模式，属性改为mode:'remote'后可以提供后台搜索功能，在后台提供相应的搜索实现代码，使用输入关键字自动搜索功能时可以加入提示功能，需要添加的属性为：
+prompt:'输入关键字',。
+
+2、使用combobox获取所有区域时需要显示的属性为：textField:'name'，但是Area这个bean里面没有这个属性，可以自定义一个getName()方法，返回的是一个province+city+district这类的数据。
+
+3、使用combobox使用搜索功能时由于数据库的字母都是大写，所以用户输入的关键子需要转换为大写，输入汉字也仍然可使用toUpload方法，因为该方法不影响汉字。
+
+4、错误：ids for this class must be manually assigned before calling save()
+   解决办法：String类型的id，在插入oracle数据库之前需要先手动给定id
+	
+5、防止json转换死循环的问题，进行一个设置
+	JsonConfig config = new JsonConfig();
+    config.setCycleDetectionStrategy(CycleDetectionStrategy.LENIENT);
+	
+6、使用注解开启迫切内连接，在一的一方添加fetch = FetchType.EAGER这个属性
+	@OneToMany(mappedBy = "area",fetch = FetchType.EAGER)
+	private Set<SubArea> subareas = new HashSet<SubArea>();
+	
+7、在SubArea中包含area属性，而Area中又包含有一个SubArea的set集合，如果在查询SubArea时想要显示Area里面的部分信息，但是不想把set集合里面的对象都给查询出来，可以在config.setExcludes(new String[] {"areas"})中把那个set集合排除
+
+
+8、JDK方式的WebService服务
+
+使用JDK方式开发WebService服务
+
+(1)新建一个web工程，因为使用的是JDK方式，所以不需要导入jar包。
+(2)新建一个用于提供服务的类，并且在main方法里面配置一个服务链接
+	@WebService
+	public class JDKServer {
+		//该WebService服务提供一个sayHello方法，用于返回一条问候语句
+		public String sayHello(String name) {
+			System.out.println("sayHello方法被调用了");
+			return "Hello: "+name;
+		}
+		
+		//创建该服务的访问链接，运行该服务即可开启该WebService服务
+		//浏览器访问：http://localhost:9090/sayhello?wsdl 即可查看该服务的说明书
+		//<service name="JDKServerService">该标签里面的name表示可提供服务的类
+		public static void main(String[] args) {
+			String address = "http://localhost:9090/sayhello";
+			Object implementor = new JDKServer();
+			Endpoint.publish(address, implementor);
+		}
+	}
+
+使用JDK方式开发WebService服务客户端
+
+(1)打开cmd窗口，输入命令：wsimport -s . http://localhost:9090/sayhello?wsdl 生成调用服务的本地代码(需联网)
+(2)新建一个普通Java工程，直接将下载好的本地代码粘贴到项目的src文件夹中
+(3)新建一个MyTest测试类，用于测试WebService服务的功能
+	public class MyTest {
+		public static void main(String[] args) {
+			JDKServerService jdkServerService = new JDKServerService();
+			//获得该服务的调用入口，该对象是JDKServer接口类型
+			JDKServer jdkServerImpl = jdkServerService.getJDKServerPort();
+			//使用该入口对象去调用服务里面的方法
+			String sayHello = jdkServerImpl.sayHello("李四");
+			System.out.println(sayHello);
+		}
+	}
+	
+	
+9、CXF方式的WebService服务
+
+使用CXF开发WebService服务端
+
+(1)创建动态web工程，将必须的jar包拷贝到WEB-INF下的lib目录
+(2)配置web.xml，添加如下代码(config-location属性是CXFServlet类里面的一个属性，用于加载applicationContext文件)：
+	<!-- 配置CXF的Servlet -->
+	<servlet>
+		<servlet-name>cxf</servlet-name>
+		<servlet-class>org.apache.cxf.transport.servlet.CXFServlet</servlet-class>
+		<!-- 指定Spring框架的配置文件位置 -->
+		<init-param>
+			<param-name>config-location</param-name>
+			<param-value>classpath:applicationContext.xml</param-value>
+		</init-param>
+	</servlet>
+	<!--指定Servlet的访问路径 -->
+	<servlet-mapping>
+		<servlet-name>cxf</servlet-name>
+		<url-pattern>/webservice/*</url-pattern>
+	</servlet-mapping>
+(3)创建一个	WebService类，该类用于向客户提供各种功能
+	@WebService
+	public class MyServer {
+		public String sayHello(String name) {
+			System.out.println("sayHello方法被调用了");
+			return "Hello: "+name;
+		}
+	}
+(4)新建相应的applicationContext.xml，添加如下配置
+	<beans xmlns="http://www.springframework.org/schema/beans"
+		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:jaxws="http://cxf.apache.org/jaxws"
+		xmlns:soap="http://cxf.apache.org/bindings/soap"
+		xsi:schemaLocation="http://www.springframework.org/schema/beans 
+						http://www.springframework.org/schema/beans/spring-beans.xsd
+						http://www.springframework.org/schema/tx
+						 http://www.springframework.org/schema/tx/spring-tx.xsd
+						http://cxf.apache.org/bindings/soap 
+						http://cxf.apache.org/schemas/configuration/soap.xsd
+						http://cxf.apache.org/jaxws 
+						http://cxf.apache.org/schemas/jaxws.xsd">
+						
+		<!-- 因为MyWebService没有实现任何接口, 所以注册一个简单CXF即可，如果实现了接口,使用jaxws:server节点-->		
+		<jaxws:endpoint id="myServer" address="/hello" implementor="com.zoke.server.MyServer"></jaxws:endpoint>
+	</beans>
+
+	访问：http://localhost:8080/CXFWebServer/webservice/ 查看是否发布成功
+	查看服务说明的路径为：http://localhost:8080/CXFWebServer/webservice/hello?wsdl 
+
+	
+使用CXF开发WebService客户端
+
+(1)下载服务代码到本地
+	<1>wsimport -s . http://localhost:8080/CXFWebServer/webservice/hello?wsdl(编译生成class文件，有jdk即可)
+	<2>wsdl2java -d . http://localhost:8080/CXFWebServer/webservice/hello?wsdl(不生成class文件，需解压cxf程序)
+(2)创建一个普通Java工程，将下载好的本地代码包括文件夹复制到项目src目录下，只保留接口java文件，其他的全部删掉，删掉非接口文件后接口文件会报错，将接口中报错部分删掉，例如删掉 @XmlSeeAlso({ObjectFactory.class})大括号中报错的ObjectFactory.class
+(3)复制上面新建的服务端web工程的整个lib文件夹到该java工程中,并且要右键buildpath
+(4)复制上面新建的服务端web工程的applicationContext.xml到该java工程src目录下,并且修改成如下的样子：
+	<beans xmlns="http://www.springframework.org/schema/beans"
+		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:jaxws="http://cxf.apache.org/jaxws"
+		xmlns:soap="http://cxf.apache.org/bindings/soap"
+		xsi:schemaLocation="http://www.springframework.org/schema/beans 
+						http://www.springframework.org/schema/beans/spring-beans.xsd
+						http://www.springframework.org/schema/tx
+						 http://www.springframework.org/schema/tx/spring-tx.xsd
+						http://cxf.apache.org/bindings/soap 
+						http://cxf.apache.org/schemas/configuration/soap.xsd
+						http://cxf.apache.org/jaxws 
+						http://cxf.apache.org/schemas/jaxws.xsd">
+						
+		<jaxws:client id="client" address="http://localhost:8080/CXFWebServer/webservice/hello" serviceClass="com.zoke.server.MyServer"></jaxws:client>
+	</beans>
+(5)编写测试类进行测试，确保WebService服务端服务已开启
+	public class MyTest {
+		public static void main(String[] args) {
+			ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext("applicationContext.xml");
+			MyServer myServer = (MyServer) context.getBean("client");
+			String sayHello = myServer.sayHello("我来了");
+			System.out.println(sayHello);
+		}
+	}

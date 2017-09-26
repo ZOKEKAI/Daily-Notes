@@ -1,0 +1,224 @@
+1.创建一个表空间(不能单独执行一行，必须将以下的配置一次性全部执行):
+	create tablespace 表空间的名称
+	datafile '文件路径'
+	size 100m初始大小(新建后该数据库文件即为初始大小)
+	autoextend on
+	next 每次增长多少
+	
+(1)新建一个名为zoke的表空间
+(相当于创建一块空间，该空间不属于任何用户，也就是说一个表空间可以被多个用户使用，但是在创建一个用户的时候必须要指定一个表空间，在A表空间中创建的用户可以使用B表空间，创建顺序为：表空间-->用户-->表)：
+	create tablespace zoke
+	datafile 'c:\zoke.dbf'
+	size 100m
+	autoextend on
+	next 5m;
+	
+(2)创建一个用户并为其指定表空间：
+	create user zoke
+	identified by zoke123
+	default tablespace zoke;
+	
+(3)用户授权
+	grant CREATE SESSION to zoke;
+
+	授予dba的角色 数据库管理员
+	grant dba to zoke;
+	管理员可以获取别的用户的表数据
+	select * from scott.emp;
+	
+(4)删除表空间
+	用户可以使用不同的表空间，并且不会随着表空间的删除而被删除：
+	|新建一个名为zoke的表空间，再新建一个名为zoke的用户
+	|为该zoke用户分配管理员权限后可以把该名为zoke的表空间删除
+	|删除表空间后该用户还存在，想要使用该用户操作数据库需要为其重新指定表空间
+	drop tablespace zoke;
+	
+2、表的操作
+	-- 修改列名
+	alter table person rename column gender to sex;
+
+	-- 删除列
+	alter table person drop column mobile;
+	
+	-- 重命名表 
+	rename person to p;
+
+	-- 删除表
+	drop table p;
+	
+	-- 使用子查询创建表
+	create table emp as select * from scott.emp;
+	
+	--使用子查询向表中插入数据
+	insert into emp1 select * from scott.emp where deptno=10;
+	
+	-- 创建/查询一张和scott.emp结构相同,但是不需要里面的数据
+	select * from scott.emp where 1=2;
+	create table emp1 as select * from scott.emp where 1=2;
+
+3、表的约束
+	-- 创建一张带有各种约束的表: person 
+	create table person(
+		 pid number primary key,
+		 pname varchar2(20) unique,
+		 age number not null,
+		 sex varchar2(10) check(sex in('男','女','妖'))
+	);
+	
+	--添加外键约束(product表的cno是外键列，category表的cid列是主键)
+	alter table product add foreign key(cno) references category(cid);
+	--添加级联删除
+	alter table product add foreign key(cno) references category(cid) on delete cascade;
+	
+	--要删除主表时首先需要删除从表，才能删除主表，也可强制性删除主表，例如强制删除category表: 先断开所有外键约束,然后再删除自己
+	drop table category cascade constraint;
+	
+	级联删除 : 删除主表中记录的时候,先看从表中有没有关联的记录,如果有,先删除从表关联记录,再删主表中的记录
+	
+4、delete 和 truncate 的区别：
+      delete: 逐条删除，删除每一行都记录进入日志
+          DML: 支持事务,删除的数据可以回滚    
+      truncate: 先删除表,再重建表，只记录删除整个表整个动作
+          DDL: 不支持事务,删除数据,不能回滚，效率高
+		  
+5、隔离级别
+	Oracle隔离级别:
+		READ COMMITTED 默认隔离级别
+		SERIAZABLE
+		READ ONLY  
+			
+	Mysql隔离级别:
+		READ UNCOMMITTED  读未提交 , 脏读,幻读,不可重复读
+		READ COMMITTED    读已提交,  幻读,不可重复读
+		REPEATABLE READ   可重复读,  幻读
+		SERIAZABLE        串行化 , 一个事务在执行时,另外一个事务处于等待状态
+		
+6、PL/SQL编程
+	
+	事务
+	declare
+		-- 声明部分
+	begin
+		-- 业务逻辑
+		insert into lou values(1);
+		insert into lou values(2);
+		savepoint sanlou;
+		insert into lou values(3);
+		insert into lou values(3);
+		insert into lou values(4);
+		commit;  
+	exception
+		-- 异常处理部分
+		when others then
+		  rollback to sanlou;
+		  commit;
+	end;
+	
+	声明及输出(varchar2后面要指定大小，中间使用 := ，字符串使用单引号)
+	declare
+	  msg varchar2(20) := 'hello world';
+	begin
+	  dbms_output.put_line(msg);
+	end;
+	
+	查询某员工的工资
+	declare
+	  //声明变量,emp.sal%type声明一个和emp表中sal这一列的类型一样的变量
+	  vsal emp.sal%type;
+	begin
+	  //将empno=7369员工的sal的值赋值给vsal变量
+	  select sal into vsal from emp where empno=7369;
+	  dbms_output.put_line(vsal);
+	end;
+	
+	查询empno=7369的员工的记录
+	declare
+	   //声明变量,emp%rowtype声明一个和emp表中记录(行)一样的变量
+	   vrow emp%rowtype;
+	begin
+	  select * into vrow from emp where empno=7369;
+	  dbms_output.put_line('姓名:'||vrow.ename||' 工资:'||vrow.sal);
+	end;
+	
+7、视图
+	视图: 实际是对查询语句的一个封装,能够简化复杂的查询语句,屏蔽表中细节，相当于一个可自定义大小查看或操作表数据的窗口
+       视图本身不存储任何数据,所有的数据都存放在原来的表中,对视图的操作就是对原表的操作视图只是在逻辑上可以看成一张表    
+   
+	语法(中括号里面的内容为可选内容):
+       create [or replace] view 视图的名称 as 查询语句 [ with read only]
+	   
+	建立一个名为pic的视图：
+		create or replace view pic as select job,sal from emp;
+	查看该视图(新建好该视图后以后查看该内容时可以直接查看该视图，简化查询语句)：
+		select * from pic;
+	使用同义词 
+	1. 给表取别名, 缩短表名
+	2. 增大代码被破解的难度
+	create synonym tt for pic;
+	
+8、序列
+	序列: 一组有顺序/规则的数字
+	   1,3,5,7,9...
+	   1,2,3,4,5,6,7,8,9,10...
+	   1,3,5,7,9,2,4,6,8......
+    作用: 主要是用来生成ID，并指定增长规则
+           
+    语法:
+        create sequence 序列名称
+        start with 从几开始
+        increment by 每次增长多少
+        minvalue n  | nominvalue
+        maxvalue n  | nomaxvalue
+        cycle  | nocycle
+        cache n;  向后缓存 n 个数
+            1,2,3,4,5
+                      6,7,8,9,10  
+        
+     currval : 取当前值,必须是调用了一次nextval之后才能正常使用
+     nextval : 下一个值
+	 
+	 新建一个序列：
+	 create sequence seq_test1
+	 start with 1
+	 increment by 2
+	 minvalue 0
+	 maxvalue 9
+	 cycle
+	 cache 2;
+	 
+	 首先调用nextval获得产生的值：select seq_test1.nextval from dual;
+	 然后才可以取得currval：select seq_test1.currval from dual;
+	 
+	 开发常用写法
+	 create sequence seq_test2;
+	 select seq_test2.nextval from dual;
+	 
+	 例子：插入500万条记录
+	 create table wbw(
+		c1 varchar2(30),
+		c2 varchar2(30)   
+	 );
+
+	 create sequence seq_test3;
+
+	 使用PLSQL循环插入数据(留意序列的使用方法)
+	 declare
+	 begin
+	   for i in 1..5000000 loop
+		 insert into wbw values('c1:'||seq_test3.nextval,'c2:'||i);
+	   end loop;
+	   commit;
+	 end;
+
+9、创建索引
+	
+	索引原理 : 一种已经排好顺序的数据结构
+               btree : balance tree  平衡多路查找树
+	语法:
+        create index 索引名称 on 表名(列名)
+		
+	创建一列索引
+		create index wbw_c1 on wbw(c1);
+	创建多列索引
+		create index wbw_c12 on wbw(c1,c2);
+	

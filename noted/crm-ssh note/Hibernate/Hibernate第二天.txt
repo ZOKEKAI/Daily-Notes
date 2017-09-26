@@ -1,0 +1,25 @@
+1、持久化类  = java类 + 映射文件
+2、java判断两个对象相同，是通过地址进行比较。而hibernate判断两个持久化对象是否相同，是通过OID的值
+3、持久化类，不要使用final修饰符。
+*final修饰类，这个类不能被继承。导致load方法的延迟加载特性失效。	*load延迟加载的底层实现，是通过继承持久化对象的方式实现的。如果，使用final修饰符，这个类无法被继承，所以，延迟加载失效。
+4、持久化对象的三种状态的定义(当脱管的持久化对象再次关联到session时，脱管期间的变动会被持久化到数据库中)：
+* 瞬时状态（Transient），在持久化类刚new出来还未关联session时: 没有oid,没有关联session对象
+* 持久状态（Persistent），关联session后:有oid, 关联session对象
+* 脱管状态（Detached），在执行close方法后: 有oid, 没有关联session对象
+5、持久化对象处于持久态时会通过一级缓存自动更新数据库
+6、一级缓存：就是session缓存，session级别的缓存，默认可使用。一级缓存的生命周期与session一致。
+二级缓存：SessionFactory级别的缓存，需要手动配置才能使用的。二级缓存的生命周期与SessionFactory一致。
+Hibernate通过OID来区分持久化对象。OID相同，认为是同一个持久化对象。
+从数据库查询到数据时会存一份到以及缓存中，每次查询都会优先查询一级缓存，缓存没有这个数据再去访问数据库	
+一级缓存的存储结构：Map<key--OID, value--Object>  map; 
+clear()：清除一级缓存中全部对象
+evict(Object obj): 清除一级缓存中指定对象
+7、缓存和快照
+(1)session内部，有两个存储区：一级缓存区和快照区。
+(2)get/load查询到的数据，一级缓存区和快照区，各自保存一份(注意：保存对象本身，而不是引用)。
+(3)持久化对象，在持久状态下，进行修改。只修改缓存区的数据，快照区的数据不变（即一直保持和数据库的原始数据一致），快照相当于是数据库指定的数据在内存的克隆版，用于和缓存区对比是否有改动，而不用每次都查询数据库。
+(4)事务提交时，对比缓存区和快照区。如果相同，说明数据与数据库的原始数据一致，无需update。如果不同，执行update。
+8、没有“thread”配置，使用getCurrentSession()方法，会报错
+<!-- 配置session绑定本地线程 -->
+<property name="hibernate.current_session_context_class">thread</property>
+注意：getCurrentSession()获取的session对象。在线程销毁时，自动关闭，千万不要手动调用session.close()方法，会报错。

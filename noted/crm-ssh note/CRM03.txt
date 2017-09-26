@@ -1,0 +1,440 @@
+1、新增用户信息非空校验
+
+	CustomerAction部分(举例两个参数)：
+		if (StringUtils.isEmpty(customer.getCust_name())) {
+			addFieldError("error_result","用户名不能为空！");
+			return Constant.INPUT_ERROR;
+		}
+		if (customer.getCust_industry()!=null && StringUtils.isEmpty(customer.getCust_industry().getDict_id())) {
+			addFieldError("error_result", "行业不能为空！");
+			return Constant.INPUT_ERROR;
+		}
+		
+	struts.xml部分(错误后回到add页面)：
+		<package name="customer" extends="struts-default" namespace="/">
+			<action name="customer_*" class="customerAction" method="{1}">
+				<result name="success">/jsp/customer/list.jsp</result>
+				<result name="input_error">/jsp/customer/add.jsp</result>
+			</action>
+		</package>
+		
+	JSP部分(用于取出在CustomerAction存进去的错误提示信息)：
+		<tr>
+			<td>
+				<INPUT class=button id=sButton2 type=submit value=" 保存 " name=sButton2>
+			</td>
+			<td>
+				<font color="red">${fieldErrors.error_result[0] }</font>
+			</td>
+		</tr>
+		
+	applicationContext.xml部分：
+		++customerAction一定要声明成多例模式，否则在多次点击保存时页面会错误
+		<bean name="customerAction" class="com.itheima.web.action.CustomerAction" scope="prototype">
+			<property name="customerService" ref="customerService"></property>
+		</bean>
+		
+2、用户保存页面数据回显
+(1)普通输入框信息回显(使用Spring封装的textfield标签进行回显，切记要将原来的属性使用双引号引起来)：
+	
+	原始标签(没有回显功能)：<INPUT class=textbox id=sChannel2 style="WIDTH: 180px" maxLength=50 name="cust_name">
+	
+	改为Spring的回显标签：
+	<s:textfield class="textbox" id="sChannel2" style="WIDTH: 180px" maxLength="50" name="cust_name"></s:textfield>
+	
+	由于struts2框架默认使用xhtml的方式显示页面，改为textfield标签后页面会错乱，需要在struts.xml切换简单主题：
+		<constant name="struts.ui.theme" value="simple"></constant>
+	
+(2)下拉框信息回显：
+	
+	未设置回显的代码：
+	<script type="text/javascript">
+		function loadDict(type_code , tag_id){
+			var url = "${pageContext.request.contextPath}/baseDict_findByAjax";
+			$.post(url ,{dict_type_code:type_code} , function(result){
+				$(result).each(function(i , n){
+					$(tag_id).append("<option value='"+n.dict_id+"'>"+n.dict_item_name+"</option>");
+				});
+			} , "json");
+		}
+		$(function(){
+			loadDict("001" , "#cust_industry");
+			loadDict("002" , "#cust_source");
+			loadDict("006" , "#cust_level");
+		})	
+	</script>
+	
+	设置回显后的代码：
+	<script type="text/javascript">
+		function loadDict(type_code , tag_id , oldValue){
+			var url = "${pageContext.request.contextPath}/baseDict_findByAjax";
+			$.post(url ,{dict_type_code:type_code} , function(result){
+				$(result).each(function(i , n){
+					$(tag_id).append("<option value='"+n.dict_id+"'>"+n.dict_item_name+"</option>");
+				});
+				
+				$(tag_id).find("option[value='"+oldValue+"']").prop("selected","selected");
+			} , "json");
+		}
+		$(function(){
+			loadDict("001" , "#cust_industry" , "${cust_industry.dict_id}");
+			loadDict("002" , "#cust_source" , "${cust_source.dict_id}");
+			loadDict("006" , "#cust_level" , "${cust_level.dict_id}");
+		})	
+	</script>
+	
+	++从作用域中取出上次所选择的行业id值
+	"${cust_industry.dict_id}"
+	
+	++根据上次选中的id值找到该多选框中对应id的选项，将其设置为已选中状态
+	$(tag_id).find("option[value='"+oldValue+"']").prop("selected","selected");
+	说明：每个下拉框(例如：客户行业下拉框)的内容都会在回调函数里面循环追加全部选项，在每一个下拉框全部追加完他的值后就使用find方法查找id值为上次选择的那个选项，将其属性设置为已选择状态
+	
+	
+3、文件上传功能的实现
+
+(1)JSP页面部分：
+	添加文件上传标签：
+	<td><input type="file" name="upload"></td>
+	修改表单提交数据类型为 multipart/form-data ：
+	<FORM id=form1 name=form1 action="${pageContext.request.contextPath }/customer_save" method=post 
+		enctype="multipart/form-data">
+
+(2)CustomerAction部分：
+	//根据需要，声明文件上传参数(struts2框架已经帮我们取到页面上传的文件存到temp里面，现在需要做的事情就取出来)
+	private File upload;  //这个upload要写成跟 页面上交过来的文件标签中的name属性值一样
+	private String  uploadContentType; //文件类型  = input + ContentType
+	private String  uploadFileName; //文件类型 = input + FileName 
+	
+	//提供set方法便于框架对这些文件上传参数进行赋值
+	public void setUpload(File upload) {
+		this.upload = upload;
+	}
+	public void setUploadContentType(String uploadContentType) {
+		this.uploadContentType = uploadContentType;
+	}
+	public void setUploadFileName(String uploadFileName) {
+		this.uploadFileName = uploadFileName;
+	}
+	
+	//保存客户的save方法
+	public String save() throws IOException {
+		//为避免重名，使用MyFileUtil工具类将原文件名改为一个随机的UUID文件名
+		String fileName= MyFileUtil.getFileName(uploadFileName);
+		//使用File(String parent,String child)，父目录，字文件名
+		File destFile = new File("E:/heima17/img" , fileName);
+		//使用的是org.apache.commons.io.FileUtils，如果文件夹不存在则创建一个
+		FileUtils.copyFile(upload, destFile);
+	}
+	
+	另附：MyFileUtil工具类代码：
+	public class MyFileUtil {
+		public static String getFileName(String fileName){
+			//获取文件的格式
+			String suffix = fileName.substring(fileName.lastIndexOf("."));
+			//使用UUID工具随机给文件取一个文件名，去掉中间的 “-”
+			String prefix = UUID.randomUUID().toString().replaceAll("-", "");
+			//拼接并返回
+			return prefix + suffix;
+		}
+	}
+	
+(3)struts.xml修改文件上传大小限制(框架的默认配置文件为：struts2-core-2.3.32.jar/org.apache.struts2/default.properties)：
+	<constant name="struts.multipart.maxSize" value="209715200"></constant>
+
+	
+4、获取客户分页数据
+		
+	PageBean部分：
+		++新建分页对象，用于存储分页数据(使用泛型，因为要分页的对象数据以后会有多个，为了通用)
+		public class PageBean<T> {
+			private int currentPage ;
+			private int totalPage ;
+			private int pageSize ;
+			private int totalSize ;
+			private List<T> list;
+			省略set和get方法
+		}
+	
+	CustomerAction部分：
+		++设置分页参数，初始值设置为默认第一页，每页显示5条
+		private int currentPage =1;
+		private int pageSize = 5;
+		
+		++提供分页参数的set方法，框架会将页面传递过来的分页数据设置到定义的参数里面去
+		public void setCurrentPage(int currentPage) {
+			this.currentPage = currentPage;
+		}
+		public void setPageSize(int pageSize) {
+			this.pageSize = pageSize;
+		}
+		
+		++新增findByPage方法
+		public String findByPage() {
+			//新建离线查询对象
+			DetachedCriteria criteria = DetachedCriteria.forClass(Customer.class);
+			PageBean<Customer> pageBean = customerService.findByPage(criteria,currentPage,pageSize);
+			//将返回的pageBean对象压入值栈
+			ValueStack valueStack = ActionContext.getContext().getValueStack();
+			valueStack.push(pageBean);
+			return Constant.PAGE_SUCCESS;
+		}
+		
+	CustomerServiceImpl部分；
+		++新增findByPage方法用于封装pageBean对象：
+		public PageBean<Customer> findByPage(DetachedCriteria criteria, int currentPage, int pageSize) {
+			PageBean<Customer> pageBean = new PageBean<>();
+			
+			pageBean.setCurrentPage(currentPage);
+			pageBean.setPageSize(pageSize);
+			
+			int totalSize = customerDao.findCount(criteria);
+			int totalPage = (int) Math.ceil(totalSize * 1.0 / pageSize);
+			List<Customer> list = customerDao.findByPage(criteria , currentPage , pageSize);
+			
+			pageBean.setTotalSize(totalSize);
+			pageBean.setTotalPage(totalPage);
+			pageBean.setList(list);
+			
+			return pageBean;
+		}
+		
+	CustomerDaoImpl部分：
+		++新增findCount方法用于查询客户总数，新增findByPage方法用于分页获取客户对象
+		public int findCount(DetachedCriteria criteria) {
+			criteria.setProjection(Projections.rowCount());
+			List<Long> count = (List<Long>) getHibernateTemplate().findByCriteria(criteria);
+			//切记将criteria对象添加的查询数量的条件设置回null
+			criteria.setProjection(null);
+			if (count.size()>0) {
+				return count.get(0).intValue();
+			}
+			return 0;
+		}
+		public List<Customer> findByPage(DetachedCriteria criteria, int currentPage, int pageSize) {
+			//(currentPage - 1)*pageSize：与之前的分页相同
+			List<Customer> list = (List<Customer>) getHibernateTemplate().findByCriteria(criteria, (currentPage - 1)*pageSize, pageSize);
+			return list;
+		}
+		
+	struts.xml部分：
+		++在对应的action里面添加这行代码，表示转跳到客户列表：
+		<result name="page_success">/jsp/customer/list.jsp</result>
+		
+	list.jsp页面部分(获取在action压入值栈存有客户对象的list集合，由于pageBean在栈顶，可以直接写list集合)：
+		<c:forEach items="${list}" var="customer">
+		<TR style="FONT-WEIGHT: normal; FONT-STYLE: normal; BACKGROUND-COLOR: white; TEXT-DECORATION: none">
+			<TD>${customer.cust_name }</TD>
+			<TD>${customer.cust_level.dict_item_name }</TD>
+			<TD>${customer.cust_source.dict_item_name }</TD>
+			<TD>${customer.cust_industry.dict_item_name }</TD>
+			<TD>${customer.cust_address }</TD>
+			<TD>${customer.cust_phone }</TD>
+			<TD>
+			<a href="${pageContext.request.contextPath }/customer/CustomerServlet?method=editCustomerUI&custId=${customer.cust_id}">修改</a>
+			&nbsp;&nbsp;
+			<a href="${pageContext.request.contextPath }/customer/CustomerServlet?method=removeCustomer&custId=${customer.cust_id}">删除</a>
+			</TD>
+		</TR>	
+		</c:forEach>
+	web.xml部分(由于在list.jsp页面显示customer对象里面的cust_level对象时使用到对象导航查询，但在service层提交了事务后session就关闭了，导致在页面需要取customer对象里面的子对象时报错，需要让session延迟关闭，在web.xml里面配置如下代码)：
+		<filter>
+			<filter-name>openSession</filter-name>
+			<filter-class>org.springframework.orm.hibernate5.support.OpenSessionInViewFilter</filter-class>
+		</filter>
+		  
+		<filter-mapping>
+			<filter-name>openSession</filter-name>
+			<url-pattern>*.action</url-pattern>  	
+		</filter-mapping>
+		
+	menu.jsp页面(由于使用到了延迟关闭session，根据web.xml文件的配置，在访问客户列表时需要加上后缀 .action)：
+		<A class=style2 href="${pageContext.request.contextPath}/customer_findByPage.action" target=main>－ 客户列表</A>
+		
+	将原来写好的保存客户成功后的转跳页面改为如下代码(struts.xml文件)：
+		<result name="save_success" type="redirectAction">customer_findByPage.action</result>
+	将原来的保存客户的action的返回值改为：
+		return Constant.SAVE_SUCCESS;
+		
+		
+5、客户列表底部分页工具栏
+	
+	list.jsp页面：
+		<DIV style="LINE-HEIGHT: 20px; HEIGHT: 20px; TEXT-ALIGN: right">
+			共[<B>${totalSize}</B>]条记录,[<B>${totalPage}</B>]页
+			,每页显示
+			<select name="pageSize" onchange="changePageSize()">
+				<option value="5" <c:if test="${pageSize==5 }">selected</c:if>>5</option>
+				<option value="10" <c:if test="${pageSize==10 }">selected</c:if>>10</option>
+				<option value="15" <c:if test="${pageSize==15 }">selected</c:if>>15</option>
+			</select>
+			条
+			[
+				<s:if test="currentPage == 1">
+					前一页
+				</s:if>
+				<s:else>
+					<A href="javascript:to_page(${currentPage-1})">前一页</A>
+				</s:else>
+			]
+			<B>${currentPage}</B>
+			[
+				<s:if test="currentPage == totalPage">
+					后一页
+				</s:if>
+				<s:else>
+					<A href="javascript:to_page(${currentPage+1})">后一页</A>
+				</s:else>
+			] 
+			到
+			<input type="text" size="3" id="page" name="currentPage" />
+			页
+			<input type="button" value="Go" onclick="to_page()"/>
+		</DIV>
+		
+		++对应的触发方法：
+			<SCRIPT language=javascript>
+				++点击上一页下一页或者点击跳到第几页的触发方法
+				function to_page(page){
+					//如果有人带了参数过来，说明点击的是上一页或下一页，就给标签id是page的那个go前面的输入框赋值，赋的就是带过来的数据
+					if(page){
+						$("#page").val(page);
+					}else{
+						//没有带参数，说明不是点击的上一页或下一页，而是在go的那个框输入了要跳转的具体页。
+						//为了防止用户输入的值超出总页数的范围，需要做个判断
+						//取得输入框所输入的值，并且获取总页数的值，两个对比，如果输入值大于总页数提示并跳到最后一页
+						var requestPage =$("#page").val() ;
+						var totalPage =  "${totalPage}"; 
+						//Number(requestPage)和Number(totalPage)表示将字符串转换为Number即数字类型
+						if(Number(requestPage)  > Number(totalPage)){
+							alert("超过了最大页数，自动跳转到最后一页")
+							$("#page").val(totalPage);
+						}
+					}
+					document.customerForm.submit();	
+				}
+				//切换每页显示条数的触发方法，只需提交表单就会自动把pageSize这个属性的值带到后台
+				function changePageSize() {
+					document.customerForm.submit();	
+				}
+			</SCRIPT>
+			
+			
+6、增加客户列表筛选功能
+
+(1)list.jsp页面添加筛选框以及设置普通属性回显功能
+	<TR>
+		<TD>客户名称：</TD>
+		<TD>
+			<s:textfield class="textbox" id="sChannel2" style="WIDTH: 80px" maxLength="50" name="cust_name"></s:textfield>
+		<td>客户级别：</td>
+		<td>
+			<select name="cust_level.dict_id" class="textbox" id="cust_level" style="WIDTH: 80px;height: 21px">
+				<option value="">--请选择--</option>
+			</select>								
+		</td>
+		<td>所属行业 ：</td>
+		<td>
+			<select name="cust_industry.dict_id" class=textbox id="cust_industry" style="WIDTH: 80px;height: 21px">
+				<option value="">--请选择--</option>
+			</select>
+		</td>
+		<td>客户来源 ：</td>
+		<td>
+			<select name="cust_source.dict_id" class=textbox id="cust_source" style="WIDTH: 80px;height: 21px">
+				<option value="">--请选择--</option>
+			</select>
+		</td>
+		<TD>电话：</TD>
+		<TD>
+			<s:textfield  class="textbox" id="sChannel2" style="WIDTH: 80px" maxLength="50" name="cust_phone"></s:textfield>
+		<TD>客户地址：</TD>
+		<TD>
+			<s:textfield  class="textbox" id="sChannel2" style="WIDTH: 80px" maxLength="50" name="cust_address"></s:textfield>
+		<TD><INPUT class=button id=sButton2 type=submit value=" 筛选 " name=sButton2></TD>
+	</TR>
+	
+(2)显示下拉框的回显
+	function loadDict(type_code , tag_id , dict_id){
+		var url = "${pageContext.request.contextPath}/baseDict_findByAjax";
+		$.post(url ,{dict_type_code:type_code} , function(result){
+			//遍历这个result ，这个result其实就是一个集合 、 数组 、 遍历一次，就得到一个字典对象
+			$(result).each(function(i , n){ // 遍历一次，执行一次function,  i: 索引 ， n: 遍历得到的对象，字典对象
+				//动态往标签添加内容。
+				$(tag_id).append("<option value='"+n.dict_id+"'>"+n.dict_item_name+"</option>");
+			});
+			
+			$(tag_id).find("option[value='"+dict_id+"']").prop("selected","selected");
+		} , "json");
+	}
+	$(function(){
+		loadDict("001" , "#cust_industry" , "${cust_industry.dict_id}"); //所属行业
+		loadDict("002" , "#cust_source" , "${cust_source.dict_id}");//客户来源
+		loadDict("006" , "#cust_level" , "${cust_level.dict_id}"); //客户级别
+	})
+	
+(3)根据JSP页面传递过来的条件，在CustomerAction的findByPage方法中的离线查询对象添加查询条件：
+
+	//姓名模糊查询(select * from cst_customer where cust_name like '%输入的名字%')
+	if (!StringUtils.isEmpty(customer.getCust_name())) {
+		criteria.add(Restrictions.like("cust_name", "%"+customer.getCust_name()+"%"));
+	}
+	//电话模糊查询(cust_phone是cst_customer表里面手机号码那一列)
+	if (!StringUtils.isEmpty(customer.getCust_phone())) {
+		criteria.add(Restrictions.like("cust_phone", "%"+customer.getCust_phone()+"%"));
+	}
+	//地址模糊查询(customer.getCust_address()表示获得页面上用户输入的地址关键字)
+	if (!StringUtils.isEmpty(customer.getCust_address())) {
+		criteria.add(Restrictions.like("cust_address", "%"+customer.getCust_address()+"%"));
+	}
+	
+	//根据行业查询
+	if (customer.getCust_industry()!=null && !StringUtils.isEmpty(customer.getCust_industry().getDict_id())) {
+		criteria.add(Restrictions.eq("cust_industry.dict_id", customer.getCust_industry().getDict_id()));
+	}
+	//根据来源查询
+	if (customer.getCust_source()!=null && !StringUtils.isEmpty(customer.getCust_source().getDict_id())) {
+		criteria.add(Restrictions.eq("cust_source.dict_id", customer.getCust_source().getDict_id()));
+	}
+	//根据级别查询
+	if (customer.getCust_level()!=null && !StringUtils.isEmpty(customer.getCust_level().getDict_id())) {
+		criteria.add(Restrictions.eq("cust_level.dict_id", customer.getCust_level().getDict_id()));
+	}
+	
+	
+7、删除客户功能
+
+	list.jsp页面部分：
+		++给页面的删除按钮添加超链接
+		<a href="javascript:del(${customer.cust_id})">删除</a>
+		
+		++点击删除按钮所触发的方法，切记不能使用delete作为方法名，该名字是关键字
+		function del(id){
+			var flag = confirm("确定删除该客户吗?");
+			if(flag){
+				location.href="${pageContext.request.contextPath }/customer_delete?cust_id="+id;
+			}
+		}
+		
+	CustomerAction部分：
+		++添加delete方法
+		public String delete(){
+			customerService.delete(customer);
+			return Constant.DELETE_SUCCESS;
+		}
+		
+	CustomerServiceImpl部分：
+		++添加delete方法
+		public void delete(Customer customer) {
+			customerDao.delete(customer);
+		}
+		
+	CustomerDaoImpl部分：
+		++添加delete方法
+		public void delete(Customer customer) {
+			getHibernateTemplate().delete(customer);
+		}
+		
+	struts.xml部分：
+		++在对应的action添加返回结果处理
+		<result name="delete_success" type="redirectAction">customer_findByPage.action</result>

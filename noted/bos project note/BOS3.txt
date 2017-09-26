@@ -1,0 +1,148 @@
+1、工具栏点击添加按钮弹出添加页面
+	var toolbar = [ {
+		id : 'button-add',
+		text : '增加',
+		iconCls : 'icon-add',
+		handler : function(){
+			//standardWindow为用于添加信息的div页面的id，这段代码表示打开该页面
+			$("#standardWindow").window("open")
+		}	
+	}]
+	
+2、使用Function校验并提交form表单
+	function submitData() {
+		// 校验表单中所有数据是否已经正确填写
+		var flag = $("#standardForm").form("validate")
+		if (flag) {
+			// 绑定提交按钮并提交表单数据，提交的地址在form表单的action参数值
+			$("#standardForm").submit()
+		}
+	}
+	
+3、datagrid里面使用table时必须使用thead标签，否则数据显示不正常
+
+4、使用jspn工具转换数据格式注意事项
+(1)在使用到JSONObject.fromObject(map)和JSONArray.fromObject(list)时，
+   需要导的包为net.sf.json.JSONObject而不是com.alibaba.fastjson.JSON。
+(2)net.sf.json.JSONObject：用在单个对象或map集合的转换
+   net.sf.json.JSONArray：用在list集合或者数组的转换
+   
+5、点击修改按钮对派送标准进行修改时弹出修改页面并回显数据
+	var toolbar = [ {
+		id : 'button-edit',
+		text : '修改',
+		iconCls : 'icon-edit',
+		handler : function(){
+			//判断用户总共选择了几条数据，使用getSelections方法进行获取用户选中所有条数的数据，存到rows数组中
+			var rows = $("#grid").datagrid("getSelections");
+			if(rows.length==1){
+				//选中一条才可以进行修改，然后使用load方法将rows里面的第一条(仅一条)数据载入回form表单
+				$("#standardWindow").window("open")
+				$("#standardForm").form("load",rows[0])
+			}else{
+				$.messager.alert("提示","请至少选择一条数据","warning");
+			}
+		}
+	}]
+	
+6、收派标准下拉栏，自动获取并回显后台传递回来的数据的写法
+	<td>取派标准</td>
+	<td>
+		<input type="text" name="standard.id" 
+				class="easyui-combobox" 
+				data-options="required:true,valueField:'id',textField:'name',
+				url:'../../standardAction_findAll.action'"/>
+	</td>
+	
+7、解决Hibernate懒加载时session关闭导致报错的解决方法
+(1)在web.xml文件添加session延时关闭代码
+(2)在Bean类里面使用transient关键字(瞬时态)修饰不需要序列化的bean对象的某些字段，但会造成该字段所有业务都不会序   列化的问题，需谨慎
+(3)JSONConfig方式排除不需要序列化的字段
+	//新建一个JsonConfig对象，该对象和从后台获取回来的数据并没有关系，只是个设置例外字段的工具
+	JsonConfig config = new JsonConfig();
+    // 设置序列化时忽略的字段
+    config.setExcludes(new String[] {"fixedAreas", "takeTime"});
+    String json = JSONObject.fromObject(map, config).toString();
+(4)在映射文件当中使用fetch迫切连接的方式
+
+8、用户勾选复选框进行作废操作时多个作废ID的拼接方式
+	function doDelete(){
+		//获取用户选中的数量
+		var rows = $("#grid").datagrid("getSelections");
+		if(rows.length==0){
+			$.messager.alert("提示","请至少选择一条数据","warning");
+		}else{
+			//至少选中一条才可以进行操作
+			
+			方式一：使用JS的Array类里面的push方法(拼接链接时需要将数组转换为String)
+			$.messager.confirm("提示信息","确定要删除吗?",function(r){
+			// 用户确认删除
+			if(r){
+				// 拼接Id字符串
+				var delIDs = new Array();
+				for (var i = 0; i < selections.length; i++) {
+					delIDs.push(rows[i].id);
+				}
+				window.location.href="../../courierAction_batchDel.action?ids="+delIDs.toString()
+			}
+		}
+	}
+	
+	方式二：使用原始的字符串拼接的方式，需要使用substring去掉最后面的逗号
+	$.messager.confirm("提示信息","确定要删除吗?",function(r){
+	// 用户确认删除
+	if(r){
+		// 拼接Id字符串
+		var delIDs="";
+		for (var i = 0; i < selections.length; i++) {
+			delIDs+=selections[i].id+",";
+		}
+		//去除最后的逗号
+		delIDs=delIDs.substring(0,delIDs.length-1)
+		window.location.href="../../courierAction_batchDel.action?ids="+delIDs
+	}
+	
+	作废ID的service层操作
+	@Override
+    public void batchDel(String ids) {
+      //需要先对web层传递过来的ID属性进行判空处理
+      if (!StringUtils.isEmpty(ids)) {
+        String[] idsArr = ids.split(",");
+        for (String id : idsArr) {
+          //此处不能删除，而应该是修改状态，但是此处需要的id是Integer，所以需要转换
+           courierDao.updateById(Integer.parseInt(id));
+        }
+      }
+    }
+	
+9、分页查询的Pageable对象需要在action层封装，然后传递下去
+	private int page;
+	private int rows;
+	public void setPage(int page) {
+		this.page = page;
+	}
+	public void setRows(int rows) {
+		this.rows = rows;
+	}
+	  
+	@Action("standardAction_pageQuery")
+	public String pageQuery() throws IOException {
+		
+		Pageable pageable = new PageRequest(page-1, rows);
+		Page<Standard> page = standardService.pageQuery(pageable);
+		
+		long total = page.getTotalElements();
+		List<Standard> rows = page.getContent();
+		
+		//封装一个符合分页标准的json格式字符串，并返回前端页面
+		Map<String, Object> map = new HashMap<>();
+		map.put("total", total);
+		map.put("rows", rows);
+		
+		String json = JSONObject.fromObject(map).toString();
+		// 设置输出内容类型
+		ServletActionContext.getResponse().setContentType("application/json;charset=UTF-8");
+		// 输出内容
+		ServletActionContext.getResponse().getWriter().write(json);
+		return NONE;
+	}
