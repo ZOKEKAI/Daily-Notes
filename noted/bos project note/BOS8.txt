@@ -1,4 +1,4 @@
-1、在pom.xml文件里面添加坐标
+1、在common-parent工程的pom.xml文件里面添加坐标
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.data</groupId>
@@ -7,7 +7,7 @@
 		</dependency>
 	</dependencies>
 
-2、配置applicationContext.xml文件，添加spring data redis的配置
+2、在bos_fore项目中配置applicationContext.xml文件，添加spring data redis的配置
 	<!-- jedis 连接池配置 -->
 	<bean id="poolConfig" class="redis.clients.jedis.JedisPoolConfig">
 		<property name="maxIdle" value="300" />
@@ -34,3 +34,93 @@
 			</bean>
 		</property>
 	</bean>
+
+3、用户注册主逻辑代码
+	public String regist() {
+        String code = (String) ServletActionContext.getRequest().getSession().getAttribute("code");
+        if (StringUtils.isNotEmpty(code)&&StringUtils.isNotEmpty(checkcode)&&checkcode.equals(code)) {
+            customerService.regist(customer);
+            //生成36个字符的激活码
+            String activeCode = RandomStringUtils.randomNumeric(36);
+            //把激活码存入Redis,设置有效期为24小时，将手机号吗作为key，激活时依据手机号码查找该激活码
+            redisTemplate.opsForValue().set(customer.getTelephone(), activeCode, 24, TimeUnit.HOURS);
+            // 拼接邮件的内容
+            String emailBody = "亲爱的：" + customer.getUsername()
+                    + ",感谢您注册速运快递,请点击<a href='http://localhost:8280/bos_fore/customerAction_activeAccount.action?activeCode="
+                    + activeCode + "&telephone=" + customer.getTelephone() + "'>本链接</a>激活您的帐号";
+            //根据提交过来的邮箱地址，发送激活邮件
+            MailUtils.sendMail(customer.getEmail(), "激活邮件", emailBody);
+            return SUCCESS;
+        }else {
+            return ERROR;
+        }
+    }
+	
+4、用户激活主逻辑代码
+	public String activeAccount() {
+        String redisActiveCode = redisTemplate.opsForValue().get(customer.getTelephone());
+        if (StringUtils.isNotEmpty(activeCode)&&StringUtils.isNotEmpty(customer.getTelephone())&&activeCode.equals(redisActiveCode)) {
+            Customer customer2 = customerService.findByTelephone(customer.getTelephone());
+            if (customer2!=null&&customer.getType()!=null&&customer.getType()==1) {
+                return "success";
+            }else {
+				//通过业务层最终调用持久层修改数据库的用户激活状态
+                customerService.activeCustomer(customer.getTelephone());
+                return "actived";
+            }
+        }
+        return "fail";
+    }
+	
+5、修改前端页面form表单实现登陆功能
+	<form class="form-horizontal" id="loginForm" action="customerAction_login.action" method="post">
+	验证码是通过调用一个validatecode.jsp页面实现，该页面使用%包括的java代码编写
+	
+	登陆主逻辑代码：
+	public String login() throws IOException {
+        // 比对验证码
+        String serverCode = (String) ServletActionContext.getRequest().getSession().getAttribute("validateCode");
+        if (StringUtils.isNotEmpty(checkcode) && StringUtils.isNoneEmpty(serverCode)
+                && checkcode.equals(serverCode)) {
+            // 比对用户
+            Customer customer3 = customerService.login(customer.getTelephone(), customer.getPassword());
+            if (customer3 != null) {
+                System.out.println(customer3);
+                if (customer3.getType()==1) {
+                    return SUCCESS;
+                }
+                // 登录成功
+                return "notActived";
+            } else {
+                // 登录失败
+                return LOGIN;
+            }
+        }
+        return LOGIN;
+    }
+	
+5、City_Picker的使用(省市联动)
+(1)页面引入css以及js文件
+	<link rel="stylesheet" type="text/css" href="plugins/city-picker.css">
+	<script type="text/javascript" src="plugins/jquery-1.8.3.js"></script>
+	<script src="plugins/city-picker.data.js"></script>
+	<script src="plugins/city-picker.js"></script>
+(2)页面body部分使用该技术
+	<!-- html方式 -->
+	<div style="position: relative;">
+      	<input readonly type="text" data-toggle="city-picker">
+    </div>
+
+	<!-- jquery方式 -->
+	<div style="position: relative;">
+		<input id="input" type="text">
+		<input id="btn" type="button" value="重置">
+	</div>
+	<script type="text/javascript">
+	    $(function() {
+	        $("#input").citypicker()
+	        $("#btn").click(function() {
+	            $("#input").citypicker("reset")
+	        })
+	    })
+	</script>
