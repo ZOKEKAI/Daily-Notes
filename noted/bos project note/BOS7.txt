@@ -87,3 +87,11 @@
 	</script>
 	
 4、web工程要想使用struts2框架，包名必须命名为含有.action结尾的格式
+
+5、定区关联分区功能实现
+(1)在FixedAreaAction里面添加assignSubArea2FixedArea()方法，可以直接使用模型驱动接收FixedArea的ID
+(2)action接收前端页面传递过来的分区id使用字符串数组：List<String> subAreaIds 否则可能会提示找不到action的错误
+(3)设置关联关系的sql语句(使用原始SQL)：
+	@Modifying
+    @Query(value="update T_SUB_AREA set C_FIXEDAREA_ID=? where C_ID=?",nativeQuery=true)
+    void updateFixedAreaIdByCustomerId(String id, String string);
