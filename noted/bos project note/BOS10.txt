@@ -151,3 +151,18 @@
 	function doSave(){
 		$("#grid").datagrid('endEdit',editIndex );
 	}
+(4)Action部分
+	// 保存运单快速录入信息
+    @Action(value = "waybillAction_save")
+    public String save() throws IOException {
+        String flag = "0";
+        try {
+            service.save(getModel());
+        } catch (Exception e) {
+            flag = "1";
+        }
+        HttpServletResponse response = ServletActionContext.getResponse();
+        response.setContentType("text/html;charset=UTF-8");
+        response.getWriter().write(flag);
+        return NONE;
+    }
