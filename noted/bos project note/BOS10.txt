@@ -1,0 +1,153 @@
+1、生产者：将Spring与ActiveMQ整合，生产出激活邮件任务，并将该发送激活邮件的任务添加进入ActiveMQ队列
+
+(1)在common_parent父工程的pom文件中导入ActiveMQ的坐标
+	<!-- 消息队列 MQ -->
+	<dependency>
+		<groupId>org.apache.activemq</groupId>
+		<artifactId>activemq-all</artifactId>
+		<version>${activemq.version}</version>
+	</dependency>
+	
+(2)在bos_fore前端工程的applicationContext.xml添加ActiveMQ消息生产者配置，因为邮件是由bos_fore发出的
+	<!-- 指定ActiveMQ连接工厂 真正可以产生Connection的ConnectionFactory，由对应的 JMS服务厂商提供 -->
+	<bean id="amqConnectionFactory" class="org.apache.activemq.ActiveMQConnectionFactory">
+		<constructor-arg index="0" value="admin"></constructor-arg>
+		<constructor-arg index="1" value="admin"></constructor-arg>
+		<constructor-arg index="2" value="tcp://localhost:61616"></constructor-arg>
+	</bean>
+	<!-- 指定Spring Caching连接工厂 -->
+	<bean id="connectionFactory"
+		class="org.springframework.jms.connection.CachingConnectionFactory">
+		<!-- 目标ConnectionFactory对应真实的可以产生JMS Connection的ConnectionFactory -->
+		<property name="targetConnectionFactory" ref="amqConnectionFactory"></property>
+		<!-- Session缓存数量 -->
+		<property name="sessionCacheSize" value="100" />
+	</bean>
+	<!-- 指定消息的生产者 -->
+	<bean id="jmsQueueTemplate" class="org.springframework.jms.core.JmsTemplate">
+		<!-- 这个connectionFactory对应的是我们定义的Spring提供的那个ConnectionFactory对象 -->
+		<constructor-arg ref="connectionFactory" />
+		<!-- 定义JmsTemplate的Queue类型 -->
+		<!--true : 发布/订阅模式 -->
+		<!--false : 队列模式 -->
+		<property name="pubSubDomain" value="false" />
+	</bean>
+	
+(3) 封装好激活邮件的内容，并添加进入ActiveMQ消息队列里面去
+	将原来的直接发送激活邮件代码：MailUtils.sendMail(customer.getEmail(), "激活邮件", emailBody);
+	修改为以下的这些改动：
+	//先注入Spring的JmsTemplate消息生产者模板，用于向ActiveMQ传递消息
+	@Autowired
+	(Autowired是根据类型注入，所以在applicationContext配置里面的id名不一定要和jmsTemplate一样)
+    private JmsTemplate jmsTemplate;
+	
+	//封装激活邮件内容
+	MessageCreator messageCreator = new MessageCreator() {
+		public Message createMessage(Session session) throws JMSException {
+			MapMessage mapMessage = session.createMapMessage();
+			mapMessage.setString("email", customer.getEmail());
+			mapMessage.setString("subject", "激活邮件");
+			mapMessage.setString("emailBody", emailBody);
+			return mapMessage;
+		}
+	};
+	// 将该邮件任务添加进activeMQ的emailQuene消息队列里面
+	// 参数1 : 队列的名字
+	// 参数2 : 具体的消息内容
+	jmsTemplate.send("emailQuene", messageCreator);
+
+
+2、消费者：从ActiveMQ队列中取出该任务并调用MailUtils工具类完成发送激活邮件的功能，由监听器listener(消费者)完成对消息队列的监听
+
+(1)新建一个名为middlerware的war工程作为中间件(消费者),继承自common_parent父工程
+
+(2)在web.xml文件里面添加Spring框架的配置
+	<context-param>
+		<param-name>contextConfigLocation</param-name>
+		<param-value>classpath:applicationContext.xml</param-value>
+	</context-param>
+	<!-- 配置Spring框架的监听器 -->
+	<listener>
+		<listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+	</listener>
+
+(3)在middlerware这个中间件里面配置好连接工厂，并指定消息的消费者
+	<!-- 指定Spring框架扫描的包 -->
+	<context:component-scan base-package="com.itheima.middlerware" />
+	<!-- 指定ActiveMQ 连接工厂，真正可以产生Connection的ConnectionFactory，由对应的 JMS服务厂商提供 -->
+	<bean id="amqConnectionFactory" class="org.apache.activemq.ActiveMQConnectionFactory">
+		<constructor-arg index="0" value="admin"></constructor-arg>
+		<constructor-arg index="1" value="admin"></constructor-arg>
+		<constructor-arg index="2" value="tcp://localhost:61616"></constructor-arg>
+	</bean>
+	<!-- 指定Spring Caching连接工厂 -->
+	<bean id="connectionFactory" class="org.springframework.jms.connection.CachingConnectionFactory">
+		<!-- 目标ConnectionFactory对应真实的可以产生JMS Connection的ConnectionFactory -->
+		<property name="targetConnectionFactory" ref="amqConnectionFactory"></property>
+		<!-- Session缓存数量 -->
+		<property name="sessionCacheSize" value="100" />
+	</bean>
+	<!-- 指定消息的消费者，listener监听器(同时也是实现消费者的类)监听队列的变化，若有相关的消息产生便会通知消费者去消费该消息，而实现消费者的类就是下面的emailListener -->
+	<jms:listener-container destination-type="queue"
+		container-type="default" connection-factory="connectionFactory"
+		acknowledge="auto">
+		<!-- destination: 队列的名字,表示从哪个队列里接收消息，ref：为首字母小写的消费者类名，用于处理接收过来的任务 -->
+		<jms:listener destination="emailQuene" ref="emailListener" />
+	</jms:listener-container>
+	
+(4)创建消费者的具体实现类(同时也是监听器)，切记打上@Component注解
+	@Component
+	public class EmailListener implements MessageListener{
+		public void onMessage(Message message) {
+			//将message强转为MapMessage类型，以便使用getString()方法
+			MapMessage mapMessage = (MapMessage) message;
+			String email = mapMessage.getString("email");
+			String subject = mapMessage.getString("subject");
+			String emailBody = mapMessage.getString("emailBody");
+			MailUtils.sendMail(email, subject, emailBody);
+		}
+	}
+	
+	
+3、使用datagrid实现运单快速录入功能
+[页面地址 :/bos_managment_web/src/main/webapp/pages/take_delivery/waybill_quick.html]
+(1)运单数据表格部分
+	$('#grid').datagrid( {
+		iconCls : 'icon-forward',
+		fit : true,
+		border : true,
+		rownumbers : true,
+		striped : true,
+		pageList: [30,50,100],
+		pagination : true,
+		toolbar : toolbar,
+		url :  "",
+		idField : 'id',
+		columns : columns,
+		onDblClickRow : doDblClickRow,
+		onAfterEdit : function(rowIndex, rowData, changes){
+			// 向后台发送请求,保存运单数据
+			$.post(
+					"../../waybillAction_save.action",//URL   
+					rowData,//请求参数
+					function (data) {
+						if(data == '1'){
+							alert("数据录入失败,请检查数据")
+						}
+					}//回调函数
+			)
+		}
+	});
+(2)绑定工具栏提交按钮事件
+	//工具栏
+	var toolbar = [ {
+		id : 'button-save',
+		text : '保存',
+		iconCls : 'icon-save',
+		handler : doSave
+	}];
+	
+(3)提交按钮事件的实现方法
+	function doSave(){
+		$("#grid").datagrid('endEdit',editIndex );
+	}
