@@ -1,0 +1,205 @@
+1、向父项目导入shiro框架的坐标
+		<!-- 权限控制 框架(版本号在这省略不写，根据实际项目而定) -->
+		<dependency>
+			<groupId>org.apache.shiro</groupId>
+			<artifactId>shiro-all</artifactId>
+			<version>${shiro.version}</version>
+		</dependency>
+
+
+2、拷贝与权限相关的实体类到项目的domain子模块的com.itheima.bos.domain.system包里面去
+	Menu.java
+	Permission.java
+	Role.java
+	User.java
+启动项目以便框架完成自动建表操作
+
+
+3、在web.xml中新建一个过滤器(web工程里面)
+	<!--
+		spring框架提供,用于整合第三方框架使用
+		这个过滤器一定要在Struts框架的过滤器之前，Spring框架的配置之后
+		Tomcat启动的时候,加载web.xml,然后创建DelegatingFilterProxy,
+		创建本对象的时候,需要访问Spring框架中注册的一个bean,这个bean的名字是和这个filter的必须一样
+	-->
+	<filter>
+		<filter-name>shiroFilterFactoryBean</filter-name>
+		<filter-class>org.springframework.web.filter.DelegatingFilterProxy</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>shiroFilterFactoryBean</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
+	
+	
+4、在web子项目的applicationContext.xml中添加如下代码：
+	<!-- 注册shiro框架 -->
+	<bean id="shiroFilterFactoryBean" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+		<property name="securityManager" ref="securityManager"></property>
+
+		<!-- 认证的页面 -->
+		<property name="loginUrl" value="/login.html" />
+		<!-- 认证成功以后要跳转的页面 -->
+		<property name="successUrl" value="/index.html" />
+		<!-- 认证失败以后要跳转的页面 -->
+		<property name="unauthorizedUrl" value="/login.html" />
+
+		<!-- 过滤规则 -->
+		<!--
+
+			/** 过滤一切资源
+			authc 框架提供的一个过滤器,如果认证成功,放行.如果认证失败,拒绝访问
+			anon 框架提供的一个过滤器,允许匿名访问
+			过滤规则执行的时候是从上往下执行的,执行一个规则以后,后面的规则不再执行
+		-->
+		<property name="filterChainDefinitions">
+			<value>
+				/css/* = anon
+				/data/* = anon
+				/demo/* = anon
+				/demo/* = anon
+				/images/* = anon
+				/js/** = anon
+				/validatecode.jsp* = anon
+				/userAction_login.action = anon
+				/** = authc
+			</value>
+		</property>
+
+	</bean>
+
+	<!-- 注册安全管理器 -->
+	<bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+		<!-- 注册自己实现的realm -->
+		<property name="realm" ref="userRealm"></property>
+	</bean>
+	
+	
+5、调用框架的登录方法
+(1)修改登录按钮，绑定提交表单
+	<form class="form-horizontal" id="loginform" name="loginform" method="post" action="userAction_login.action">
+		<div class="form-group" id="idInputLine">
+			<label for="inputPassword3" class="col-sm-3 control-label">账号</label>
+			<div class="col-sm-8">
+				<input id="loginform:idInput" type="text" name="username"
+					class="form-control" placeholder="请输入手机号/邮箱/用户名">
+			</div>
+		</div>
+		<div class="form-group" id="pwdInputLine">
+			<label id="loginform:pwdInput" class="col-sm-3 control-label">密码</label>
+			<div class="col-sm-8">
+				<input for="pwdInput" type="password" class="form-control"
+				name="password"
+					id="inputaccount" placeholder="请输入您的密码">
+			</div>
+		</div>
+		<div class="form-group">
+			<label for="inputvalidate" class="col-sm-3 control-label">验证码</label>
+			<div class="col-sm-4">
+				<input type="text" class="form-control" id="inputaccount"
+				name="validatecode"
+					placeholder="请输入验证码">
+			</div>
+			<div class="col-sm-4">
+				<img id="loginform:vCode" src="validatecode.jsp"
+					onclick="javascript:document.getElementById('loginform:vCode'). src='validatecode.jsp?'+Math.random();" />
+			</div>
+		</div>
+		<div class="form-group">
+			<div class="col-sm-offset-3 col-sm-4">
+				<input type="checkbox">
+				<span class="size12"> 记住用户名</span>
+			</div>
+			<div class="col-sm-4">
+				<a href="#">
+					<span class="size12 forget">忘记密码</span>
+				</a>
+			</div>
+		</div>
+		<div class="col-md-offset-3 col-md-8">
+			<a onclick="submitData()" id="loginform:j_id19"
+				name="loginform:j_id19" class="btn btn-danger">立即登录</a>
+		</div>
+	</form>
+(2)添加提交表单函数
+	// 提交form表单的数据
+    function submitData() {
+        $("#loginform").submit()
+    }
+(3)新建一个Action用于接收处理传递过去的参数
+	private String validatecode;
+    public void setValidatecode(String validatecode) {
+        this.validatecode = validatecode;
+    }
+
+    @Action(value = "userAction_login",
+            results = {@Result(name = "success", location = "/index.html", type = "redirect"),
+                       @Result(name = "login", location = "/login.html", type = "redirect")})
+    public String login() throws Exception {
+        String serverCode = (String) ServletActionContext.getRequest().getSession().getAttribute("key");
+        // 比对验证码
+        if (StringUtils.isNotEmpty(serverCode) && StringUtils.isNotEmpty(validatecode) && serverCode.equals(validatecode)) {
+            // 获取Subject，也即相当于是当前用户
+            Subject subject = SecurityUtils.getSubject();
+            // 使用传递过来的用户名和密码构建令牌
+            AuthenticationToken token = new UsernamePasswordToken(getModel().getUsername(), getModel().getPassword());
+            try {
+                // 调用Subject的登录方法，将token传递到realm的实现类去
+                subject.login(token);
+                // 获取登录成功以后的User对象，实际上就是realm的实现类认证后返回的结果，如果登陆失败则抛出异常
+                User user = (User) subject.getPrincipal();
+                ServletActionContext.getRequest().getSession().setAttribute("user", user);
+                // org.apache.shiro.authc.UnknownAccountException
+                // org.apache.shiro.authc.IncorrectCredentialsException
+                return SUCCESS;
+            } catch (UnknownAccountException e) {
+                // 用户名不存在
+                e.printStackTrace();
+            } catch (IncorrectCredentialsException e) {
+                // 密码错误
+                e.printStackTrace();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return LOGIN;
+    }
+(4)在service层实现realm，在service层(位置可随意)新建一个与其他部分开的system包，创建UserRealm类，该类继承realm接口的一个实现类AuthorizingRealm
+[切勿忘记在applicationContext.xml里面注册自己实现的realm(UserRealm类)，并且被securityManager这个bean引用]
+	@Component
+	public class UserRealm extends AuthorizingRealm {
+		@Autowired
+		private UserDao userDao;
+		// 授权方法
+		@Override
+		protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+			return null;
+		}
+		// 认证方法
+		@Override
+		protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
+			// 根据用户名查找用户
+			UsernamePasswordToken usernamePasswordToken = (UsernamePasswordToken) token;
+			String username = usernamePasswordToken.getUsername();
+			User user = userDao.findByUsername(username);
+			if (user != null) {
+				// 如果用户存在,比对密码
+				/**
+				 * @param principal the 'primary' principal associated with the specified realm.<br/>
+				 * 
+				 *        身份,通常传入的是查找到的用户.而且这个值决定了subject.getPrincipal()方法的返回值
+				 * @param credentials the credentials that verify the given principal.<br/>
+				 *        凭证,密码
+				 * @param realmName the realm from where the principal and credentials were acquired.
+				 */
+				AuthenticationInfo info = new SimpleAuthenticationInfo(user, user.getPassword(), getName());
+				// 比对密码的逻辑交由框架去处理
+				return info;
+			}
+			return null;
+		}
+	}
+(5)在dao层的system包里面添加对应的dao类实现
+	public interface UserDAO extends JpaRepository<User, Integer> {
+		User findByUsername(String username);
+	}
