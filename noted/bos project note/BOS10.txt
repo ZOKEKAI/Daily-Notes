@@ -16,8 +16,7 @@
 		<constructor-arg index="2" value="tcp://localhost:61616"></constructor-arg>
 	</bean>
 	<!-- 指定Spring Caching连接工厂 -->
-	<bean id="connectionFactory"
-		class="org.springframework.jms.connection.CachingConnectionFactory">
+	<bean id="connectionFactory" class="org.springframework.jms.connection.CachingConnectionFactory">
 		<!-- 目标ConnectionFactory对应真实的可以产生JMS Connection的ConnectionFactory -->
 		<property name="targetConnectionFactory" ref="amqConnectionFactory"></property>
 		<!-- Session缓存数量 -->
@@ -88,9 +87,7 @@
 		<property name="sessionCacheSize" value="100" />
 	</bean>
 	<!-- 指定消息的消费者，listener监听器(同时也是实现消费者的类)监听队列的变化，若有相关的消息产生便会通知消费者去消费该消息，而实现消费者的类就是下面的emailListener -->
-	<jms:listener-container destination-type="queue"
-		container-type="default" connection-factory="connectionFactory"
-		acknowledge="auto">
+	<jms:listener-container destination-type="queue" container-type="default" connection-factory="connectionFactory" acknowledge="auto">
 		<!-- destination: 队列的名字,表示从哪个队列里接收消息，ref：为首字母小写的消费者类名，用于处理接收过来的任务 -->
 		<jms:listener destination="emailQuene" ref="emailListener" />
 	</jms:listener-container>
