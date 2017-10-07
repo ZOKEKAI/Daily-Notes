@@ -1,0 +1,212 @@
+1、自定义realm进行授权	(该方式用于用户登陆时对用户可访问的资源进行控制)
+(1)在bos_managment_web工程的applicationContext.xml,为shirofilter增加权限：
+	/areaAction_pageQuery.action = perms["area"]
+	作用为要获取area的分页数据时需要有"area"权限
+(2)接着需要在realm的实现类里面给用户授予"area"权限，才能查看分页数据，在service子目录中的UserRealm.java文件修改为如下代码：
+	// 授权方法
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+        SimpleAuthorizationInfo info = new SimpleAuthorizationInfo();
+		//其中字符串"area"任意取值都可以，只需要跟perms["area"]中的字符串一样就行
+        info.addStringPermission("area");
+        return info;
+    }
+	实际是否授权根据从数据库查询该用户是否拥有该权限而定，而不是直接使用info.addStringPermission("area")添加权限
+	而该方法接收的参数principals就是从数据库查询到的用户对象
+	
+	
+2、使用注解方式对权限进行控制	(该方式用于用户登陆后的权限控制，例如增删查改的权限控制)
+(1)在bos_managment_web工程的applicationContext.xml，添加配置，设置代理方式为cglib，切记修改事务管理器代理
+	<!-- 修改事务管理器部分 -->
+	<tx:annotation-driven proxy-target-class="true" transaction-manager="transactionManager" />
+	
+	<!-- 基于spring自动代理方式为Service类创建代理方式,实现权限控制 -->
+	<bean class="org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator">
+		<!-- 强制使用cglib方式创建代理对象 -->
+		<property name="proxyTargetClass" value="true"></property>
+	</bean>
+	
+	<!-- 配置切面 切面 = 切点(从那里插入代码) + 通知(插入的代码) -->
+	<bean class="org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor">
+		<property name="securityManager" ref="securityManager"></property>
+	</bean>
+(2)在需要权限的方法上面添加权限注解，例如在bos_managment_service子项目的CourierServiceImpl实现类中的batchDel方法增加一个操作权限：
+	@RequiresPermissions("courier:delete")	//和前面一样，括号内的字符串可任意取值
+    @Override
+    public void batchDel(String ids) {
+      //需要先对该ID属性进行判空处理
+      if (!StringUtils.isEmpty(ids)) {
+        String[] idsArr = ids.split(",");
+        for (String id : idsArr) {
+          //此处不能删除，而应该是修改状态，但是此处需要的id是Integer，所以需要转换
+           courierDao.updateById(Integer.parseInt(id));
+        }
+      }
+    }
+(3)接着需要在realm的实现类里面给用户授予"courier:delete"权限，，在原来的基础上添加一行授权代码，才能删除快递员
+	// 授权方法
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+        SimpleAuthorizationInfo info = new SimpleAuthorizationInfo();
+        info.addStringPermission("area");
+		info.addStringPermission("courier:delete");
+        return info;
+    }
+	
+	
+3、使用JSP页面标签进行权限控制，切记只能使用在JSP页面上	(该方式用于根据权限显示某些特定内容，例如登陆状态以及删除按钮等)
+(1)在JSP页面导入shiro标签库
+	<%@ taglib uri="http://shiro.apache.org/tags" prefix="shiro"%>
+(2)使用标签控制显示的内容
+	<body>
+		<!-- 代表当前用户已认证  -->
+		<shiro:authenticated>
+			您已经通过认证
+		</shiro:authenticated>
+
+		<!-- 检查当前用户是否拥有对应的权限 -->
+		<shiro:hasPermission name="area">
+			您拥有area权限
+		</shiro:hasPermission>
+
+		<!-- 检查当前用户是否有对应的角色 -->
+		<shiro:hasRole name="adddddmin">
+			您拥有admin角色
+		</shiro:hasRole>
+	</body>
+(3)给toolbar工具栏图标显示增加根据权限显示的功能，将按钮代码放入权限标签内即可
+	toolbar: [
+		<shiro:hasPermission name="area">
+		{
+			text: "删除",
+			handler: function() {
+				// 获取选择的行
+				var rows = $('#tb').datagrid('getSelections')
+				if (rows.length == 1) {
+					index = $('#tb').datagrid('getRowIndex', rows[0])
+					$('#tb').datagrid('deleteRow', index)
+				}
+
+			}
+		} 
+		</shiro:hasPermission>
+	]
+	
+	
+4、用户退出登陆功能的实现
+(1)在index.html修改退出系统的触发事件
+	function logoutFun() {
+		$.messager.confirm('系统提示','您确定要退出本次登录吗?',function(isConfirm) {
+			if (isConfirm) {
+				location.href = 'userAction_logout.action';
+			}
+		});
+	}
+(2)在UserAction中添加一个退出登陆的方法
+	@Action(value = "userAction_logout",results = {@Result(name = "success", location = "/login.html", type = "redirect")})
+    public String logout() {
+        //退出登陆
+        SecurityUtils.getSubject().logout();
+        //清除服务器端该用户的session数据
+        ServletActionContext.getRequest().getSession().invalidate();
+        return SUCCESS;
+    }
+	
+
+5、使用combotree动态加载父菜单项，也即下拉栏内容
+(1)首先确保数据库中含有菜单项的数据，需提前导入数据
+(2)修改bos_managment_web工程pages/system/menu_add.html的父菜单项节点，修改为：
+	<tr>
+		<td>父菜单项</td>
+		<td>
+			<input  name="parentMenu.id"  class="easyui-combotree" data-options="url:'../../menuAction_findTopMenus.action',method:'get'">
+		</td>
+	</tr>
+(3)在com.itheima.bos.web.action.system包下新增MenuAction类
+	@Autowired
+    private MenuService menuService;
+    
+    @Action("menuAction_findTopMenus")
+    public String findTopMenus() {
+        List<Menu> list = menuService.findTopMenus();
+        String menuList = findList(list, new String[] {"roles","childrenMenus","parentMenu"});
+        return NONE;
+    }
+(4)需要注意的是查找父节点根据的是该节点是否含有父节点来查询：menuDao.findByParentMenuIsNull();
+(5)返回格式，由combotree的json格式可知，返回的数据需要一个属性为"text"和一个属性为"children"的内容
+由于json在封装数据时根据的是bean里面的get方法的返回内容来封装的，而原来的Menu.java文件中并没有这两个属性
+所以需要手动添加这两个属性的返回方法。
+	<1>combotree给定的json格式：
+	[{
+		"id":1,
+		"text":"My Documents",
+		"children":[{
+			"id":11,
+			"text":"Photos",
+			"state":"closed",
+			"children":[{
+				"id":111,
+				"text":"Friend"
+			},{
+				"id":112,
+				"text":"Wife"
+			},{
+				"id":113,
+				"text":"Company"
+			}]
+		}
+	}]
+	<2>给Menu.java文件添加以下代码：
+	public String getText() {
+        return name;
+    }
+	public Set<Menu> getChildren() {
+        return childrenMenus;
+    }
+	<3>为Menu.java的childrenMenus属性设置迫切连接以解决懒加载问题
+	@OneToMany(mappedBy = "parentMenu",fetch=FetchType.EAGER)
+	private Set<Menu> childrenMenus = new HashSet<Menu>();
+	
+
+6、添加菜单
+(1)Action部分直接将模型驱动封装好的menu对象传递到service层
+(2)service层进行判断处理，若直接保存menu对象会引起瞬时态问题，传递过来的menu可以看到是这个样子的：
+Menu [id=0, name=1, page=1, priority=1, description=1, roles=[], childrenMenus=[], parentMenu=Menu [id=0, name=null, page=null, priority=null, description=null, roles=[], childrenMenus=[], parentMenu=null]]
+在保存最外层的Menu对象时hibernate框架会自动为其生成一个可用的id，所以可以顺利插入数据库。
+但是这个Menu对象中有一个parentMenu对象，若是在页面新增菜单节点时没有选择任何节点作为其父节点的话，由于其主键为int类型，传递到后台后其id值默认为0
+hibernate不会自动为其生成一个可用id，这个对象与数据库里面的数据没有任何关联，所以这个对象是一个瞬时态对象，直接保存会报瞬时态错误
+而如果用户在前端页面选择了父节点的话，由于节点是从数据库查询出来的，所以此时的parentMenu对象的id不为空，是持久态对象
+所以在保存之前需要先将其设置为null，表示其为顶级节点，即可避免该瞬时态问题
+	public void save(Menu menu) {
+        if (menu.getParentMenu() != null && menu.getParentMenu().getId() == 0) {
+            // if成立说明需要要添加一个顶级菜单
+            menu.setParentMenu(null);
+        }
+        menuDao.save(menu);  
+    }
+	
+	
+7、分页查询所有菜单
+(1)bos.managment_web工程/pages/system/menu.html页面的datagrid增加以下属性(在toobar工具栏代码之后)
+	url : '../../menuAction_findAll.action',
+	pagination:true,
+	fit: true,
+	即可分页显示出来所有菜单的信息
+(2)MenuAction.java文件中增加相应的查询方法
+	// 分页查询所有的菜单
+    @Action(value = "menuAction_findAll")
+    public String findAll() {
+        // Struts框架封装属性的时候,会优先考虑模型
+        // 如果模型有对应的属性,就会直接封装给模型，所以需要单独从模型对象中取出该页数
+        String pnum = getModel().getPage();
+        page= Integer.parseInt(pnum);
+        Pageable pageable = new PageRequest(page - 1, rows);
+        Page<Menu> page = menuService.pageQuery(pageable);
+        commonPageQuery(page, new String[] {"roles", "childrenMenus", "parentMenu"});
+        return NONE;
+    }
+	
+	
+8、在添加权限的form表单中添加action链接时切勿忘记在链接前面加上:"../../"
+	action="../../permissionAction_save.action"
+	
