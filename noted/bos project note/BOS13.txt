@@ -173,6 +173,15 @@
 	$.post("menuAction_findByUser.action",function(data){
 		$.fn.zTree.init($("#treeMenu"), setting, data);
 	},"json");
+	
+	由于页面需要一个pId的属性以便形成父子菜单，所以需要在Menu实体里面添加一个get方法：
+	//由于原来的pId中的第二个字母是大写，所以在添加get方法时要保持原样写为pId，而不能写成PId
+	public Integer getpId() {
+	    if (parentMenu==null) {
+            return 0;
+        }
+	    return parentMenu.getId();
+	}
 (2)新增findByUser方法，已登陆用户直接从shiro框架里面取
 	@Action("menuAction_findByUser")
     public String findByUser() {
