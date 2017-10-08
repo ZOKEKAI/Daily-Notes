@@ -1,0 +1,196 @@
+1、动态获取权限并展示为多选框
+	$.post("../../permissionAction_findAll.action",function(data) {
+		for(var i = 0; i < data.length; i++) {
+			$("#td_permission").append(
+				"<input id='" + data[i].id + "' type='checkbox' name='permissionIds' value='" + data[i].id + "' /><label for='" + data[i].id + "'>" +
+				data[i].name +
+				"</label>")
+		}
+	}, "json");
+
+	给多选框的文字增加点击时选中该多选框的功能
+	"<input id='" + data[i].id + "' type='checkbox' name='permissionIds' value='" + data[i].id + "' /><label for='" + data[i].id + "'>" + data[i].name + "</label>"
+
+2、动态获取菜单并将其添加到前端页面的菜单树里面去
+	$.ajax({
+		url : '../../menuAction_findTopMenus.action',
+		type : 'POST',
+		dataType : 'text',
+		success : function(data) {
+			var zNodes = eval("(" + data + ")");
+			$.fn.zTree.init($("#menuTree"), setting, zNodes);
+		},
+		error : function(msg) {
+			alert('树加载异常!');
+		}
+	});
+	
+3、角色管理中添加角色时拼接id并提交数据到后台
+	$('#save').click(function(){
+		//if条件判断中切勿忘记$符号，并且$("#roleForm").form("validate")整个作为if的条件
+		if($("#roleForm").form("validate")){
+			//根据id获取ztree对象
+			var treeObj = $.fn.zTree.getZTreeObj("menuTree");
+			//获取ztree中所有被选中的id号，true表示选中，false表示未被选中
+			var nodes = treeObj.getCheckedNodes(true);
+			//遍历这些被选中的节点，将其添加到Array数组中
+			//Array数组只有一个lengh属性，length表示的是数组所占内存空间的数目，而不仅仅是数组中元素的个数
+			var arr = new Array();
+			for(var i = 0;i<nodes.length;i++){
+				arr.push(nodes[i].id)
+			}
+			var menuIds = arr.toString();
+			$("#menuIDs").val(menuIds);
+			$("#roleForm").submit()
+		}
+	});
+	
+4、保存角色对象时建立关系代码
+	public void save(Role role, String menuIDs, Integer[] permissionIds) {
+        //先保存role对象，使其成为持久态，才能将菜单和权限跟其建立关系，持久态对象的改动会实时更新到数据库
+        roleDao.save(role);
+        //遍历permissionIds将其和role建立关系
+        if (permissionIds!=null&&permissionIds.length>0) {
+            for (Integer permissionId : permissionIds) {
+                //新建一个权限对象，此时属于瞬时态，该对象在设置id值后成为托管态
+                Permission permission = new Permission();
+                permission.setId(permissionId);
+                //让持久态的Role关联脱管态的Permission,这样才能更新数据库数据
+				//每添加一次，向中间表T_ROLE_PERMISSION插入一条数据
+                role.getPermissions().add(permission);
+            }
+        }
+        //将menuIDs切割为数组，遍历menuIDs并将其与role建立关系
+        if (StringUtils.isNotEmpty(menuIDs)) {
+            String[] splitIDs = menuIDs.split(",");
+            for (String menuID : splitIDs) {
+                Menu menu = new Menu();
+                menu.setId(Integer.parseInt(menuID));
+				//每添加一次，向中间表T_ROLE_MENU插入一条数据
+                role.getMenus().add(menu);
+            }
+        }
+    }
+	
+5、在单纯返回一个json数据时，例如使用dateguid获取网格数据时，如果Action注解写上重定向的result可能会导致网格数据为空
+	例如这个例子：
+	@Action(value = "userAction_findAll",results = {@Result(name = "success", location = "pages/system/userlist.html", type = "redirect")})
+    public String findAll() {
+        List<User> list = userService.findAll();
+        findList(list, new String[] {"roles"});
+        return NONE;
+    }
+	
+6、解决生日日期格式不一致导致获取用户列表时显示不正常的问题
+[存入数据库的birthday为Date格式，而如果直接将该Date格式的生日传回到页面则会被分为零散的数据，导致显示不正常]
+	<1>解决办法如下，将columns中field的属性值birthday改为birthdayString，然后在javabean中提供相应的getBirthdayString()方法
+	var columns = [ [{
+				//属性值与javabean中的一样即可，不固定
+				field : 'birthdayString',
+				title : '生日',
+				width : 120,
+				rowspan : 2,
+				align : 'center'
+			}
+		] ];
+	<2>	javabean中新增getBirthdayString()方法，返回String格式的日期
+	public String getBirthdayString() {
+        if (birthday == null) {
+            return "暂无数据";
+        }
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        return sdf.format(birthday);
+    }
+	
+7、动态为登陆用户授权
+(1)将com.itheima.bos.service.system包下面的UserRealm类的授权方法修改如下：
+	// 授权方法，注意授予权限和增加角色的写法
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+        SimpleAuthorizationInfo info = new SimpleAuthorizationInfo();
+        //User user = (User) SecurityUtils.getSubject().getPrincipal();
+        User user = (User) principals.getPrimaryPrincipal();
+        if (user!=null&&user.getUsername().equals("admin")) {
+            List<Permission> permissions = permissionDao.findAll();
+            for (Permission permission : permissions) {
+                info.addStringPermission(permission.getKeyword());
+            }
+            info.addStringPermission("area");
+            info.addStringPermission("courier:delete");
+            List<Role> roles = roleDao.findAll();
+            for (Role role : roles) {
+                info.addRole(role.getKeyword());
+            }
+        }else {
+            List<Permission> permissions = permissionDao.findByUserId(user.getId());
+            for (Permission permission : permissions) {
+                info.addStringPermission(permission.getKeyword());
+            }
+            info.addStringPermission("area");
+            List<Role> roles = roleDao.findByUserId(user.getId());
+            for (Role role : roles) {
+                info.addRole(role.getKeyword());
+            }
+        }
+        return info;
+    }
+(2)RoleDao添加如下代码：
+	//通过将role与user的内连接查询出某个user所属的所有角色，select后面只能写r，因为List集合只能存放一种类型的对象
+    @Query("select r from Role r inner join r.users u where u.id=?")
+    List<Role> findByUserId(int i);
+(3)PermissionDao添加如下代码：
+	//user表通过中间表与role关联，role通过中间表与permission关联，所以可以通过user-->role-->permission的方式查找所有权限
+    //使用内连接的方式通过这三张表查询出某个用户所拥有的权限，由于List集合存放的是Permission对象，所以select后面只能写p
+    @Query("select p from Permission p inner join p.roles r inner join r.users u where u.id=?")
+    List<Permission> findByUserId(int id);
+	
+8、缓存权限数据，将查询到的权限数据序列化并缓存到本地中，而不用在每次点击需要用到权限的数据时都从数据库查询权限，所以权限实体类都要实现Serializable序列化接口
+(1)在common-parent的pom.xml文件中导入权限缓存的坐标
+	<!-- 权限缓存 -->
+	<dependency>
+		<groupId>net.sf.ehcache</groupId>
+		<artifactId>ehcache-core</artifactId>
+		<version>2.6.11</version>
+	</dependency>
+(2)在bos_managment_web的applicationContext.xml中注册缓存管理器cacheManager，并注入到安全管理器securityManager中
+	<!-- 注册安全管理器，依赖于userRealm， userRealm为我们自己对realm接口的实现类-->
+	<bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+		<!-- 注册自己实现的realm -->
+		<property name="realm" ref="userRealm"></property>
+		<!-- 注入缓存管理器 -->
+    	<property name="cacheManager" ref="cacheManager" />
+	</bean>
+	<!-- 注册缓存管理器 -->
+	<bean id="cacheManager" class="org.apache.shiro.cache.ehcache.EhCacheManager">
+		<property name="cacheManagerConfigFile" value="classpath:ehcache.xml"></property>
+	</bean>
+(3)切记要将ehcache.xml配置文件放到指定的位置，这里指定的位置为和applicationContext.xml在同一个地方，这个文件可以从ehcache.jar中获取
+缓存权限数据的时长可在ehcache.xml文件中的timeToIdleSeconds="120"属性设置，当前设置为120秒
+
+9、动态显示系统菜单
+(1)修改首页基本功能菜单请求链接
+	// 基本功能菜单加载
+	$.post("menuAction_findByUser.action",function(data){
+		$.fn.zTree.init($("#treeMenu"), setting, data);
+	},"json");
+(2)新增findByUser方法，已登陆用户直接从shiro框架里面取
+	@Action("menuAction_findByUser")
+    public String findByUser() {
+        User user = (User) SecurityUtils.getSubject().getPrincipal();
+        List<Menu> list = menuService.findByUser(user);
+        System.out.println(list);
+        findList(list, new String[] {"roles", "childrenMenus", "parentMenu","children"});
+        return NONE;
+    }
+(3)在service层新增对应的方法，根据是否为管理员查找相应的菜单数据
+	@Override
+    public List<Menu> findByUser(User user) {
+        if (user.getUsername().equals("admin")) {
+            return menuDao.findAll();
+        }
+        return menuDao.findByUserId(user.getId());
+    }
+(4)MenuDao增加相应的查询方法
+	//user-->role(中间表)-->menu(通过user的id最终查询到菜单，需要经过中间表，查询语句Menu写在最前面，接着时Menu里面的roles，最后是Role里面的users)
+    @Query("select m from Menu m inner join m.roles r inner join r.users u where u.id=?")
+    List<Menu> findByUserId(int id);
