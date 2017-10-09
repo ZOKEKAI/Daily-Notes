@@ -1,0 +1,183 @@
+Socket服务端执行流程：
+
+1、点击开启server服务端后代码会执行到while循环里面的：Socket client = serverSocket.accept() 这行代码;
+此时线程会进入阻塞状态，服务端正在等待客户端的连接请求，直到有一个客户端与该socket服务器建立链接时才会产生一个socket，并继续往下执行。
+
+2、某一个客户端与该socket服务器建立链接后会继续执行到：new HandlerThread(client) 这行代码;
+这行代码会将当前与服务端连接的socket传递到内部类HandlerThread的有参构造方法里面去，该类会在构造方法里新建一条线程来处理该客户端的请求。
+而while循环的那条原来的线程继续回到Socket client = serverSocket.accept() 这行代码继续等待下一个客户端的连接请求。
+
+3、在构造方法里面执行：new Thread(this).start() 这行代码后，接着会执行该线程的run方法，run方法里面首先会通过输入流的方式
+将客户端和服务器的socket连接起来，接下来执行：inputStream.readUTF() 这行代码，该代码也会进入阻塞状态，等待客户端向建立好的socket写入数据
+当客户端向socket写入数据后readUTF()方法就能察觉到，从而将从客户端写入的数据从socket读取到服务端来，在对客户端的信息进行处理后会创建输出流
+用于向socket写出数据，服务端将响应的内容数据写回服务端的socket文件，客户端会自动取得里面的数据，并将服务端本次的输入输出流关闭，以及关闭当前socket。
+
+4、服务端向socket写出数据后会关流，客户端会取走服务端的响应数据，本次服务端的服务线程关闭，如果服务端没有发送关闭客户端连接的请求
+则在为这次服务的流和线程均关闭后客户端又会向服务端继续发起连接请求，原来阻塞在这行代码：Socket client = serverSocket.accept()
+的while循环线程接收到来自客户端的连接请求后继续产生新的socket并且执行下一行代码，接着使用：new HandlerThread(client) 创建一条线程去处理该请求，
+然后又会继续循环到：Socket client = serverSocket.accept() 这行代码，等待下一个的客户端连接请求，while死循环的线程不会结束，除非服务器关闭。
+
+注意： Socket 输出流写数据方法是 writeUTF 时，输入流读取相关数据要用 readUTF。否则会抛 EOFException 异常。
+
+
+
+Socket客户端执行流程：
+
+1、客户端首先声明好提供服务的服务端的IP和端口号，客户端启动后会进入到while(true)死循环，通过：new Socket(IP_ADDR, PORT)建立与服务端连接的socket
+并建立好与服务端连接的socket的输入输出流，当前客户端线程会进入阻塞状态，等待客户端输入请求服务端的内容，在客户端输入内容回车后会以流的方式写出到客户端的socket，服务端监听到客户端socket改动后便会取得里面的内容
+
+2、客户端向socket写好数据后，执行到：inputStream.readUTF() 这行代码，进入阻塞状态，等待服务端响应回来的数据，服务端读取到客户端发送的数据后会对客户端进行响应，客户端在接收到服务端的响应后对数据进行处理
+之后关闭此次数据通信的输入和输出流，以及关闭当前socket，但不会关闭当前线程，该线程又会重新执行while循环，重新建立与服务端的socket连接，并向服务端继续发送数据请求，服务端会继续开启一条新线程来处理这个新的连接，而客户端只要没有停止服务，一直只有一条不断执行while循环的线程
+只是在等待客户端控制台录入的或者服务器响应的数据时才会发生暂停下来产生线程阻塞。
+
+
+Socket数据通信执行流程：
+
+server启动，执行到while循环进入阻塞状态等待客户端连接-->client启动，建立一个与server连接的socket对象-->server接收到client连接请求后建立一条新线程用于处理该请求，并在该线程开启输入流用于接收client的数据
+-->client开启输入流用于读取server传递到socket的数据-->client开启输出流用于向socket写出数据-->client向socket写数据-->server使用输入流读取client写入的数据-->server处理client传递过来的数据-->server开启输出流向socket写出数据
+-->client使用输入流读取server写入的数据-->server关闭输入和输出流以及结束当前线程的服务线程，以及关闭当前socket-->client的线程继续循环在while里面继续向服务端发起连接请求，以及关闭当前socket-->server原本用于while循环的线程继续监听来自client的连接请求
+
+
+
+------------Server代码---------------
+
+	package socket.server;
+	import java.io.BufferedReader;
+	import java.io.DataInputStream;
+	import java.io.DataOutputStream;
+	import java.io.IOException;
+	import java.io.InputStreamReader;
+	import java.net.ServerSocket;
+	import java.net.Socket;
+
+	public class Server {
+		private static final int PORT = 23333;
+		
+		public static void main(String[] args) throws Exception {
+			System.out.println("服务器Socket服务已启动\n\n");
+			Server server = new Server();
+			server.init();
+		}
+		
+		public void init() {
+			try {
+				ServerSocket serverSocket = new ServerSocket(PORT);
+				while(true) {
+					// 服务器进入wihle循环,在这行代码进入阻塞状态，有客户端连接上来才会继续向下执行 
+					Socket client = serverSocket.accept();
+					// 新建一条线程用于处理这次连接
+					new HandlerThread(client);
+				}
+			} catch (IOException e) {
+				System.out.println("服务器异常"+e.getMessage());  
+			}
+		}
+		
+		private class HandlerThread implements Runnable{
+			
+			private Socket socket;
+			public HandlerThread(Socket client) {
+				this.socket = client;
+				//接收到客户端的信息后新建一个线程来进行响应
+				new Thread(this).start();
+			}
+
+			@Override
+			public void run() {
+				try {
+					//获取客户端传输到服务器的socket数据的输入流
+					DataInputStream inputStream = new DataInputStream(socket.getInputStream());
+					//通过这个输入流读取出该信息，到达readUTF方法后进入阻塞状态，等待客户端向socket写入数据才会继续向下执行
+					String clientInputStr = inputStream.readUTF();
+					System.out.println("客户端："+clientInputStr);
+					
+					//创建向socket写出数据的输出流，用于将数据响应给客户端
+					DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
+					//给服务端操作人员一个输入提示
+					System.out.println("输入内容回复客户端：");
+					//将服务端输入的一行内容封装到一个流对象去，并将该数据写回服务端的socket文件，客户端会自动取走里面的数据
+					String inputLine = new BufferedReader(new InputStreamReader(System.in)).readLine();
+					outputStream.writeUTF(inputLine);
+					
+					//关流，才会及时将数据刷到socket中
+					inputStream.close();
+					outputStream.close();
+					
+				} catch (IOException e) {
+					System.out.println("服务器运行异常"+e.getMessage());
+				}finally {
+					if (socket!=null) {
+						try {
+							socket.close();
+						} catch (IOException e) {
+							socket = null;
+							System.out.println("socket关闭异常"+e.getMessage());
+						}
+					}
+				}
+			}
+		}
+	}
+	  
+	  
+------------Client代码---------------
+
+	package socket.client;
+	import java.io.BufferedReader;
+	import java.io.DataInputStream;
+	import java.io.DataOutputStream;
+	import java.io.IOException;
+	import java.io.InputStreamReader;
+	import java.net.Socket;
+
+	public class Client {
+		
+		//指定提供socket服务的服务器IP和端口，IP地址根据服务端而定
+		private static final int PORT = 23333;
+		private static final String IP_ADDR = "127.0.0.1";
+		
+		public static void main(String[] args) {
+			System.out.println("客户端启动！");
+			System.out.println("在服务端输入OK以断开客户端连接\n\n");
+			while(true) {
+				Socket socket = null;
+				try {
+					//创建一个流套接字并将其连接到指定主机上的指定端口号
+					socket = new Socket(IP_ADDR, PORT);
+					//建立与服务器端连接的socket的输入流，用于读取该socket的数据
+					DataInputStream inputStream = new DataInputStream(socket.getInputStream());
+					
+					//请输入内容以回复服务端
+					DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
+					System.out.println("输入内容回复服务端：");
+					//通过输入流获取到客户端控制台输入的内容，并通过输出流将其写出到socket
+					String inputLine = new BufferedReader(new InputStreamReader(System.in)).readLine();
+					outputStream.writeUTF(inputLine);
+					
+					String serverInputStr = inputStream.readUTF();
+					System.out.println("服务端："+serverInputStr);
+					if ("OK".equals(serverInputStr)) {
+						Thread.sleep(500);
+						break;
+					}
+					
+					//关流
+					inputStream.close();
+					outputStream.close();
+					
+				} catch (Exception e) {
+					System.out.println("客户端异常"+e.getMessage());
+				}finally {
+					if (socket!=null) {
+						try {
+							socket.close();
+						} catch (IOException e) {
+							socket = null;
+							System.out.println("客户端socket关闭异常"+e.getMessage());
+						}
+					}
+				}
+			}
+		}
+	}
+  
