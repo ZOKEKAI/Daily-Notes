@@ -1,0 +1,74 @@
+1、使用highcharts展示区域分布饼图
+(1)导入依赖文件
+	<script src="../../js/highcharts/highcharts.js"></script>
+	<script src="../../js/highcharts/modules/exporting.js"></script>
+	<script src="../../js/highcharts/highcharts-plugins/highcharts-zh_CN.js"></script>
+(2)新建生成报表按钮
+	{
+		id: 'button-export',
+		text: '生成报表',
+		iconCls: 'icon-undo',
+		handler: showCharts
+	}
+(3)创建按钮响应函数
+	// 生成highcharts饼形图
+	function showCharts() {
+		$('#chartWindow').window("open")
+		$.post("../../areaAction_getChartsData.action", function(data) {
+			$('#container').highcharts({
+				title: {
+					text: '区域数据统计'
+				},
+				series: [{
+					type: 'pie',
+					name: '区域数据统计',
+					data: data
+				}]
+			});
+		})
+	}
+(4)报表窗口外观设置
+	$('#chartWindow').window({
+		width: 700,
+		modal: true,
+		shadow: true,
+		closed: true,
+		height: 600,
+		resizable: false
+	});
+(5)创建弹出窗口
+	<div class="easyui-window" title="区域分布图" id="chartWindow" collapsible="false" minimizable="false" maximizable="false" style="top:20px;left:200px">
+		<div id="container"></div>
+	</div>
+(6)后台部分
+	生成饼图要求的数据格式为：data: [['Firefox', 45.0],['IE', 26.8],['Safari', 8.5],['Opera', 6.2],['其他', 0.7]]
+	 
+	// 查询图表数据,生成highcharts饼形图
+    @Action("areaAction_getChartsData")
+    public String getChartsData() throws IOException {
+		//使用list集合存放多个Object数组，该Object数组里面需要存放的是[字符串,数字]的格式，才能符合数据格式要求
+        List<Object[]> list = areaService.getChartsData();
+        findList(list, null);
+        return NONE;
+    }
+	
+	// dao层使用sql语句构造符合所要求格式的数据
+	@Query("select a.province,count(*) from Area a group by a.province")
+	List<Object[]> getChartsData();
+	
+	
+2、导出PDF文件遇到的问题
+(1)依赖的jar包缺失，需要导入到本地maven库
+	错误提示：
+	net.sf.jasperreports.engine.JRRuntimeException: Could not load the following font : 
+	pdfFontName   : STSong-Light
+	pdfEncoding   : UniGB-UCS2-H
+	isPdfEmbedded : true
+(2)导入jar包命令：
+	mvn install:install-file -DgroupId=com.zoke -DartifactId=itextasian -Dversion=1.0.0 -Dpackaging=jar -Dfile=C:\Users\ZOKE\Desktop\iTextAsian.jar
+	
+	将在本地仓库生成的pom文件里面的这段代码复制到common-parent工程的pom文件里面去
+		<groupId>com.zoke</groupId>
+		<artifactId>itextasian</artifactId>
+		<version>1.0.0</version>
+(3)如果发现PDF里面的部分中文显示不出来，那是因为没有按要求将全部的text框设置为宋体中文，以及3个格式
