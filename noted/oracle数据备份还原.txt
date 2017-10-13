@@ -1,0 +1,15 @@
+
+首先进入C:\oracle11g\product\11.2.0\dbhome_1\BIN文件夹里面，打开CMD定位到该文件夹
+
+按用户导出数据(system/root为oracle数据库系统管理员账号密码)：
+	exp system/root owner=zoke file=c:\zoke.dmp
+
+导入备份数据(system/zoke123为oracle数据库系统管理员账号密码)：
+	imp system/zoke123 full=y file=C:\Users\ZOKE\Desktop\zoke.dmp
+	
+	
+整库导出数据：
+	exp system/zoke123 full=y
+	
+整库导入数据：
+	imp system/zoke123 full=y
