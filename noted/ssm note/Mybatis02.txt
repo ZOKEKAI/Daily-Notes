@@ -1,0 +1,337 @@
+1、数据库中的字段和POJO属性对应不上的解决办法
+<1>.修改成PO类的属性名称和数据库表中的字段名称一致。
+<2>.查询方法的列名使用别名 别名应和属性名称一致即可。
+<3>.使用ResultMap（作用：实际上就是相当于手动进行列名和属性名的映射）
+
+第二种方式解决办法：
+(1)POJO中的属性
+	public class Orders {
+		private Integer id;
+		private Integer userId;
+		private String number;
+		private Date createtime;
+		private String note;
+		get and set...
+	}
+(2)OrdersMapper.java接口的代码
+	public interface OrdersMapper {
+		public List<Orders> getOrdersList();
+	}
+(3)数据库中对应userId这个字段的列名为：user_id
+(4)OrdersMapper.xml配置文件(user_id使用别名：userId，目的是让他和POJO中的属性对应，框架才能正常使用set方法将这个属性封装到Orders对象中去)
+	<mapper namespace="com.mybatis.mapper.OrdersMapper">
+		<select id="getOrdersList" resultType="com.mybatis.pojo.Orders">
+			select id,user_id userId,number,createtime,note from orders
+		</select>
+	</mapper>
+(5)OrdersMapperTest.java测试代码
+	@Test
+	public void testGetOrdersList() {
+		SqlSession openSession = sqlSessionFactory.openSession();
+		// 获取OrdersMapper接口的代理对象
+		OrdersMapper mapper = openSession.getMapper(OrdersMapper.class);
+		List<Orders> list = mapper.getOrdersList();
+		for (Orders orders : list) {
+			System.out.println(orders);
+		}
+	}
+	
+第三种方式解决办法ResultMap：
+原因：由于上边的OrdersMapper.xml中sql查询列和Orders类属性不一致
+需要定义resultMap：resultMap_getOrdersList将sql查询列和Orders类属性对应起来
+(1)POJO中的属性
+	public class Orders {
+		private Integer id;
+		private Integer userId;
+		private String number;
+		private Date createtime;
+		private String note;
+		get and set...
+	}
+(2)OrdersMapper.java接口的代码
+	public interface OrdersMapper {
+		public List<Orders> getOrdersList();
+	}
+(3)数据库中对应userId这个字段的列名为：user_id
+(4)需要新增一个resultMap配置，建立一个映射关系，用于将sql查询列和Orders类属性对应起来
+	<mapper namespace="com.mybatis.mapper.OrdersMapper">
+	
+		<!-- 配置resultmap -->
+		<resultMap type="com.mybatis.pojo.Orders" id="ordersList_resultMap">
+			<!-- 配置id属性 主键属性的映射关系 -->
+			<id property="id" column="id"/>
+			<!-- 配置 普通列的属性的映射关系 -->
+			<result property="userId" column="user_id"/>
+			<!-- 如果是单表的查询 ：查询的列 和pojo中的属性名一致的情况下，可以不配置 -->
+		</resultMap>
+		
+		<!-- 使用resultmap -->
+		<select id="getOrdersList" resultMap="ordersList_resultMap">
+			select * from orders
+		</select>
+	</mapper>
+	
+2、动态sql查询语句
+
+(1)动态拼接简单数据
+<1>从域中取值，不需要使用user.id这种形式，直接使用id即可
+<2>在if条件中不能使用符号"&&"，而使用的是"and"
+	<select id="findUserList" parameterType="com.mybatis.pojo.User" resultType="com.mybatis.pojo.User">
+		select * from user
+		<where>
+			<if test="id!=null">
+				and id=#{id}
+			</if>
+			<if test="username!=null and username!=''">
+				and username like '%${username}%'
+			</if>
+		</where>
+	</select>
+
+(2)动态拼接多个用户id
+<1>首先在QueryVo中新增ids集合这个属性
+	public class QueryVo {
+		private List<Integer> ids;
+		public List<Integer> getIds() {
+			return ids;
+		}
+		public void setIds(List<Integer> ids) {
+			this.ids = ids;
+		}
+	}
+<2>UserMapper.xml中编写sql语句
+	<select id="findUserListByQueryVoIn" parameterType="com.mybatis.pojo.QueryVo" resultType="com.mybatis.pojo.User">
+		select * from user
+		<where>
+			<if test="ids!=null">
+				<foreach collection="ids" open="and id in (" close=")" item="id" separator=",">
+					#{id}
+				</foreach>
+			</if>
+		</where>
+	</select>
+	
+(3)sql片段(注意在与select平级的地方配置，不能嵌套在select里面)
+	<select id="getUserListByForeach" parameterType="com.mybatis.pojo.QueryVo" resultType="com.mybatis.pojo.User">
+		<include refid="select_base_column"/> from user where id=#{id} 
+	</select>
+	
+	<!-- 配置sql片段，其他的地方使用时使用include标签引用即可 -->
+	<sql id="select_base_column">
+		select * 
+	</sql>
+	
+(4)更新数据库多个属性的set标签
+	<update id="updatebyif" parameterType="com.mybatis.pojo.User">
+		UPDATE `user`
+		<!-- 自定拼接关键字:SET ,自动去掉多余的逗号"," -->
+		<set>
+			<if test="username!=null and username!=''">
+				username = #{username},
+			</if>
+			<if test="sex!=null and sex!=''">
+				sex = #{sex},
+			</if>
+			<if test="address!=null and address!=''">
+				address = #{address},
+			</if>
+		</set>
+		WHERE
+		id = #{id}
+	</update>
+
+3、一对一关系查询方法
+<1>--使用自定义订单用户数据模型POJO接收查询的结果
+(1)需求为将订单表orders的所有信息，以及user表的部分用户信息查询出来，但是目前没有一个现成的pojo符合封装这些数据的需求
+所以需要自定义一个POJO作为订单用户数据模型，此处新建OrdersCustom类继承Orders类，然后在OrdersCustom类里面新增两个用户信息属性
+	publicclass OrdersCustom extends Orders {
+		private String username;// 用户名称
+		private String address;// 用户地址
+		get/set。。。。
+	}
+(2)在UserMapper.xml文件中新增如下配置
+	<!-- 查询所有订单信息 -->
+	<select id="findOrdersList" resultType="com.mybatis.pojo.OrdersCustom">
+		select orders.*,orders.user_id userId,user.username,user.address from orders,user where orders.user_id=user.id
+	</select>
+(3)在测试方法中直接调用父类的get方法获取父类的属性
+	@Test
+	public void testfindOrdersList() {
+		SqlSession openSession = sqlSessionFactory.openSession();
+		UserMapper mapper = openSession.getMapper(UserMapper.class);
+		List<OrdersCustom> list = mapper.findOrdersList();
+		for (OrdersCustom ordersCustom : list) {
+			System.out.println(ordersCustom+"----"+ordersCustom.getNumber());
+		}
+	}
+
+<2>--使用resultMap映射方式接收查询结果(一对一)
+(1)在Orders类中加入User属性，用于表示一对一的关系
+	private User user;
+	public User getUser() {
+		return user;
+	}
+	public void setUser(User user) {
+		this.user = user;
+	}
+(2)在OrdersMapper.xml文件中配置Orders和User的映射，并在查询中使用该映射
+	<!-- 查询订单关联用户信息使用resultmap -->
+	<resultMap type="com.mybatis.pojo.Orders" id="orderUserResultMap">
+		<id column="id" property="id"/>
+		<result column="user_id" property="userId"/>
+		<result column="number" property="number"/>
+		<result column="createtime" property="createtime"/>
+		<result column="note" property="note"/>
+		<!-- 一对一关联映射 -->
+		<!-- 
+		property:Orders对象的user属性
+		javaType：user属性对应 的类型
+		 -->
+		<association property="user" javaType="com.mybatis.pojo.User">
+			<!-- column:user表的主键对应的列  property：user对象中id属性-->
+			<id column="user_id" property="id"/>
+			<result column="username" property="username"/>
+			<result column="address" property="address"/>
+		</association>
+	</resultMap>
+	
+	<!-- 使用resultmap -->
+	<select id="findOrdersListResultMap" resultMap="orderUserResultMap">
+		SELECT
+			o.id,
+			o.user_id,
+			o.number,
+			o.createtime,
+			o.note,
+			u.username,
+			u.address
+		FROM
+			orders o
+		JOIN `user` u ON u.id = o.user_id
+	</select>
+
+	**使用association完成关联查询，将关联查询信息映射到pojo对象中。
+	**当POJO中属性名和查询的列名不一致的时候使用resultmap比较多。
+	**当POJO中的属性名和查询的列名一致的时候，是使用resutltype.(推荐使用)
+
+4、一对多关系查询方法
+(1)User类中加入List<Orders> orders属性
+	private List<Orders> orders;
+	public List<Orders> getOrders() {
+		return orders;
+	}
+	public void setOrders(List<Orders> orders) {
+		this.orders = orders;
+	}
+(2)配置UserMapper.xml文件，添加映射以及查询语句
+	<resultMap type="com.mybatis.pojo.User" id="userOrderResultMap">
+		<!-- 用户信息映射 -->
+		<id property="id" column="id"/>
+		<result property="username" column="username"/>
+		<result property="birthday" column="birthday"/>
+		<result property="sex" column="sex"/>
+		<result property="address" column="address"/>
+		<!-- 一对多关联映射 -->
+		<!-- property="orders"表示User里面的orders属性 -->
+		<collection property="orders" ofType="com.mybatis.pojo.Orders">
+			<id column="oid" property="id"/>
+			<result column="number" property="number"/>
+		</collection>
+	</resultMap>
+	<select id="getUserOrderList" resultMap="userOrderResultMap">
+		SELECT
+			u.*, 
+			o.id oid,
+			o.number,
+			o.createtime,
+			o.note
+		FROM
+			user u
+		LEFT JOIN orders o ON u.id = o.user_id
+	</select>
+	
+
+5、Mybatis整合Spring
+
+(1)com.mybatis.pojo包下面新建一个pojo类
+	public class User {
+		private Integer id;
+		private String username;
+		get/set...
+	}
+(2)com.mybatis.mapper包下面创建UserMapper接口以及UserMapper配置文件
+	<1>接口
+	public interface UserMapper {
+		public List<User> findUserList(User user);
+	}
+	<2>配置文件
+	<mapper namespace="com.mybatis.mapper.UserMapper">
+		<select id="findUserList" parameterType="com.mybatis.pojo.User" resultType="com.mybatis.pojo.User">
+			select * from user
+			<where>
+				<if test="id!=null">
+					and id=#{id}
+				</if>
+				<if test="username!=null and username!=''">
+					and username like '%${username}%'
+				</if>
+			</where>
+		</select>
+	</mapper>
+(3)config/mybatis文件夹下面新建SqlMapConfig.xml文件，留空，因为Spirng整合后配置都写在applicationContext.xml里面
+(4)config/spring文件夹下面新建applicationContext.xml文件，里面配置如下内容
+	<!-- 导入外部数据库连接数据以及配置数据源 -->
+	<context:property-placeholder location="classpath:db.properties"/>
+	<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+		<property name="driverClassName" value="${jdbc.driver}" />
+		<property name="url" value="${jdbc.url}" />
+		<property name="username" value="${jdbc.username}" />
+		<property name="password" value="${jdbc.password}" />
+		<property name="maxActive" value="10" />
+		<property name="maxIdle" value="5" />
+	</bean>
+	
+	<!-- 配置sqlsessionfactory工厂，注入dataSource以及提供SqlMapConfig.xml配置文件用于生成session工厂 -->
+	<bean class="org.mybatis.spring.SqlSessionFactoryBean"  id="sqlSessionFactory">
+		<property name="configLocation" value="classpath:mybatis/SqlMapConfig.xml"></property>
+		<property name="dataSource" ref="dataSource"></property>
+	</bean>
+	
+	<!-- 批量扫描包下边的mapper接口 并生成代理对象  代理对象的id 默认：mapper接口的名字并首字母小写。而且自动加载映射文件 -->
+	<!-- 代替MapperFactoryBean一个个指定的方式，批量生成代理对象，而且还能自动注入sqlSessionFactory等 -->
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+       <property name="basePackage" value="com.mybatis.mapper" />
+   	</bean>
+(5)编写测试类(所有的测试方法在执行之前都先执行打上@Before注解的这个方法)
+	public class UserMapperTest {
+		
+		private ApplicationContext applicationContext;
+		
+		@Before
+		public void setUp() {
+			applicationContext = new ClassPathXmlApplicationContext("classpath:spring/applicationContext.xml");
+		}
+		
+		@Test
+		public void findUserList() {
+			UserMapper mapper = applicationContext.getBean(UserMapper.class);
+			
+			User user = new User();
+			user.setUsername("王");
+			
+			List<User> list = mapper.findUserList(user);
+			for (User user2 : list) {
+				System.out.println(user2);
+			}
+		}
+	}
+	
+	
+特别说明：
+	<1> 若使用传统方式开发的dao层，需要在实现类使用之前先给SqlSessionDaoSupport注入一个setSqlSessionFactory对象，mapper方式不需要
+	@Resource
+	public void setSqlSessionFactory(SqlSessionFactory sqlSessionFactory) {
+		super.setSqlSessionFactory(sqlSessionFactory);
+	};
+	<2> 此处还未设计到前台的开发，所以还不需要改动web.xml文件
+	<3> config文件夹为可看做原来的src文件夹
