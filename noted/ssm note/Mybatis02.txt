@@ -335,3 +335,46 @@
 	};
 	<2> 此处还未设计到前台的开发，所以还不需要改动web.xml文件
 	<3> config文件夹为可看做原来的src文件夹
+	
+	
+
+逆向工程
+
+(1)下载generatorSqlmapCustom项目，并导入到eclipse中
+(2)修改generatorSqlmapCustom工程中的generatorConfig.xml文件，需要根据实际需求修改的部分如下
+	<!--数据库连接的信息：驱动类、连接地址、用户名、密码 -->
+	<jdbcConnection driverClass="com.mysql.jdbc.Driver"
+		connectionURL="jdbc:mysql://localhost:3306/springmvc" userId="root"
+		password="123">
+	</jdbcConnection>
+	
+	<!-- targetProject:生成PO类的位置 -->
+	<javaModelGenerator targetPackage="com.ssm.pojo"
+		targetProject=".\src">
+		<!-- enableSubPackages:是否让schema作为包的后缀 -->
+		<property name="enableSubPackages" value="false" />
+		<!-- 从数据库返回的值被清理前后的空格 -->
+		<property name="trimStrings" value="true" />
+	</javaModelGenerator>
+	
+	<!-- targetProject:mapper映射文件生成的位置 -->
+	<sqlMapGenerator targetPackage="com.ssm.mapper" 
+		targetProject=".\src">
+		<!-- enableSubPackages:是否让schema作为包的后缀 -->
+		<property name="enableSubPackages" value="false" />
+	</sqlMapGenerator>
+	
+	<!-- targetPackage：mapper接口生成的位置 -->
+	<javaClientGenerator type="XMLMAPPER"
+		targetPackage="com.ssm.mapper" 
+		targetProject=".\src">
+		<!-- enableSubPackages:是否让schema作为包的后缀 -->
+		<property name="enableSubPackages" value="false" />
+	</javaClientGenerator>
+	
+	<!-- 指定数据库表 -->
+	<table schema="" tableName="user"></table>
+	<table schema="" tableName="items"></table>
+(3)右键运行项目中的GeneratorSqlmap.java文件
+
+注意：重复逆向生成不会覆盖原来的数据，只会在源文件后面追加内容，并且使用逆向工程只能针对单表的操作
