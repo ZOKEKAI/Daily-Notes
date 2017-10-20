@@ -1,0 +1,291 @@
+1、URL的3种拦截形式：
+(1)、*.action *.do	框架只拦截这些带固定的后缀的请求。不拦截静态资源 和jsp
+(2)、/     			框架拦截所有的请求（不包括JSP） ,静态资源（CSS HTML JS） 都会被拦截。如果想要不拦截，需要配置一个资源映射：<mvc:resources
+(3)、/*     		框架拦截所有的请求（包括JSP JS CSS HTML）.访问不到页面。所以：请求的拦截形式是错误的。
+
+
+2、SSM整合步骤
+
+(1)导入所需的jar包
+(2)新建SSM/config/mybatis文件夹，文件夹里面新建SqlMapConfig.xml配置文件，文件配置内容为空
+	<?xml version="1.0" encoding="UTF-8" ?>
+	<!DOCTYPE configuration
+			PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+			"http://mybatis.org/dtd/mybatis-3-config.dtd">
+	<configuration>
+	</configuration>
+(3)新建SSM/config/spring文件夹，文件夹里面新建applicationContext-dao.xml配置文件，文件配置内容为
+	<?xml version="1.0" encoding="UTF-8"?>
+	<beans xmlns="http://www.springframework.org/schema/beans"
+		xmlns:context="http://www.springframework.org/schema/context" 
+		xmlns:p="http://www.springframework.org/schema/p"
+		xmlns:aop="http://www.springframework.org/schema/aop" 
+		xmlns:tx="http://www.springframework.org/schema/tx"
+		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		xsi:schemaLocation="http://www.springframework.org/schema/beans 
+		http://www.springframework.org/schema/beans/spring-beans-4.2.xsd
+		http://www.springframework.org/schema/context 
+		http://www.springframework.org/schema/context/spring-context-4.2.xsd
+		http://www.springframework.org/schema/aop 
+		http://www.springframework.org/schema/aop/spring-aop-4.2.xsd 
+		http://www.springframework.org/schema/tx 
+		http://www.springframework.org/schema/tx/spring-tx-4.2.xsd
+		http://www.springframework.org/schema/util 
+		http://www.springframework.org/schema/util/spring-util-4.2.xsd">
+		
+		<!-- 引用外部文件方式配置数据源 -->
+		<context:property-placeholder location="classpath:db.properties"/>	
+		<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+			<property name="driverClassName" value="${jdbc.driver}"/>
+			<property name="url" value="${jdbc.url}"/>
+			<property name="username" value="${jdbc.username}"/>
+			<property name="password" value="${jdbc.password}"/>
+			<property name="maxActive" value="10"/>
+			<property name="maxIdle" value="5"/>
+		</bean>
+		
+		<!-- 配置sqlsessionfactory -->
+		<bean class="org.mybatis.spring.SqlSessionFactoryBean" id="sqlSessionFactory">
+			<property name="configLocation" value="classpath:mybatis/SqlMapConfig.xml"></property>
+			<property name="dataSource" ref="dataSource"></property>
+		</bean>
+		
+		<!-- 配置mapper扫描器:扫描包生成代理对象，并且加载映射文件 -->
+		<!-- 代替MapperFactoryBean一个个指定的方式，批量生成代理对象，而且还能自动注入sqlSessionFactory等 -->
+		<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+			<property name="basePackage" value="com.ssm.mapper"></property>
+		</bean>
+	</beans>
+(4)在SSM/config/spring文件夹下面新建applicationContext-service.xml文件，导入约束后配置如下内容
+	<!-- 用于扫描service层的类 -->
+	<context:component-scan base-package="com.ssm.service" />
+(5)在SSM/config/spring文件夹下面新建applicationContext-trans.xml文件，导入约束后配置如下内容
+	<!-- 配置事务管理器 -->
+	<bean class="org.springframework.jdbc.datasource.DataSourceTransactionManager" id="transactionManager">
+		<property name="dataSource" ref="dataSource"></property>
+	</bean>
+	<!-- 配置通知 -->
+	<tx:advice transaction-manager="transactionManager" id="txAdvice">
+		<tx:attributes>
+			<tx:method name="save*" propagation="REQUIRED"/>
+			<tx:method name="create*" propagation="REQUIRED"/>
+			<tx:method name="delete*" propagation="REQUIRED"/>
+			<tx:method name="remove*" propagation="REQUIRED"/>
+			<tx:method name="update*" propagation="REQUIRED"/>
+			<tx:method name="edit*" propagation="REQUIRED"/>
+			<tx:method name="select*" propagation="SUPPORTS" read-only="true"/>
+			<tx:method name="get*" propagation="SUPPORTS" read-only="true"/>
+		</tx:attributes>
+	</tx:advice>
+	<!-- 配置切面 -->
+	<aop:config>
+		<aop:advisor advice-ref="txAdvice" pointcut=" execution(* com.ssm.service.impl.*.*(..))"/>
+	</aop:config>
+(6)在SSM/config/spring文件夹下面新建springmvc.xml文件，配置如下内容
+	<?xml version="1.0" encoding="UTF-8"?>
+	<beans xmlns="http://www.springframework.org/schema/beans"
+		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		xmlns:p="http://www.springframework.org/schema/p"
+		xmlns:context="http://www.springframework.org/schema/context"
+		xmlns:mvc="http://www.springframework.org/schema/mvc"
+		xsi:schemaLocation="http://www.springframework.org/schema/beans 
+			http://www.springframework.org/schema/beans/spring-beans-4.2.xsd
+			http://www.springframework.org/schema/mvc 
+			http://www.springframework.org/schema/mvc/spring-mvc-4.2.xsd
+			http://www.springframework.org/schema/context 
+			http://www.springframework.org/schema/context/spring-context-4.2.xsd">
+			
+			<context:component-scan base-package="com.ssm.controller" />
+
+			<!-- 配置视图解析器的前缀 和后缀 -->
+			<bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+				<property name="prefix" value="/WEB-INF/jsp/"></property>
+				<property name="suffix" value=".jsp"></property>
+			</bean>
+	</beans>
+(7)在web.xml中配置前端控制器及加载spring容器
+	<!-- 配置前端控制器 -->
+	<servlet>
+		<servlet-name>springmvc</servlet-name>
+		<servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+		<!-- 加载配置文件 -->
+		<init-param>
+			<param-name>contextConfigLocation</param-name>
+			<param-value>classpath:spring/springmvc.xml</param-value>
+		</init-param>
+	</servlet>
+	<!-- 配置URL拦截形式 -->
+	<servlet-mapping>
+		<servlet-name>springmvc</servlet-name>
+		<url-pattern>*.action</url-pattern>
+	</servlet-mapping>
+	<!-- spring 初始化 监听器 -->
+	<context-param>
+		<param-name>contextConfigLocation</param-name>
+		<param-value>classpath:spring/applicationContext-*.xml</param-value>
+	</context-param>
+	<listener>
+		<listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+	</listener>
+(8)使用逆向工程generatorSqlmapCustom根据数据库表自动生成pojo和mapper，然后拷贝到本工程中
+(9)在com.ssm.controller包下面新建ItemController.java
+	@Controller
+	public class ItemController {	
+		@Autowired
+		private ItemService itemService;
+		
+		@RequestMapping("/itemList")
+		public ModelAndView getItemList() {	
+			List<Items> list = itemService.getItemsList();
+			ModelAndView mv = new ModelAndView();
+			mv.addObject("itemList", list);
+			mv.setViewName("itemList");
+			return mv;
+		}
+	}
+(10)创建service层的接口和实现类
+	<1>接口
+	public interface ItemService {
+		List<Items> getItemsList();	
+	}
+	<2>实现类
+	@Service
+	public class ItemServiceImpl implements ItemService {
+		@Autowired
+		private ItemsMapper mapper;
+
+		@Override
+		public List<Items> getItemsList() {	
+			// 创建查询条件对象itemsExample (查询时，如果没有条件不需要设置，但是需要有这个对象) 
+			ItemsExample example = new ItemsExample(); //select * from items;
+			// 调用方法查询
+			List<Items> list = mapper.selectByExample(example);
+			return list;
+		}
+	}
+(11)在SSM\WebContent\WEB-INF\jsp文件夹下面新建itemList.jsp文件，用于显示后台传回来的数据(核心代码)
+	<c:forEach items="${itemList }" var="item">
+	<tr>
+		<td>${item.name }</td>
+		<td>${item.price }</td>
+		<td><fmt:formatDate value="${item.createtime}" pattern="yyyy-MM-dd HH:mm:ss"/></td>
+		<td>${item.detail }</td>
+		<td><a href="${pageContext.request.contextPath }/itemEdit.action?id=${item.id}">修改</a></td>
+	</tr>
+	</c:forEach>
+	
+3、SpringMVC参数绑定
+(1)需要使用request时只需要在方法参数中传入即可
+	@RequestMapping("/itemEdit")
+	Public ModelAndView itemEdit(HttpServletRequest request) {
+		...
+	}
+(2)使用ModelAndView或者Model两种方式向页面传递参数的异同(返回值以及设置方式)
+	<1>ModelAndView方式：
+	@RequestMapping("/itemEdit.action")
+	public ModelAndView getItemById(Integer id) {
+		Items item = itemService.getItemById(id);
+		ModelAndView mv = new ModelAndView();
+		mv.addObject("item", item);
+		mv.setViewName("editItem");
+		return mv;
+	}
+	<2>Model方式(如果不需要model进行参数封装，也可以直接return到指定的页面)：
+	@RequestMapping("/itemEdit02.action")
+	public String getItemById02(Model model,HttpServletRequest request) {
+		String strid = request.getParameter("id");
+		int id = Integer.parseInt(strid);
+		Items item = itemService.getItemById(id);
+		model.addAttribute("item", item);
+		return "editItem";
+	}
+	如果使用Model则可以不使用ModelAndView对象，Model对象可以向页面传递数据，View对象则可以使用String返回值替代。
+	不管是Model还是ModelAndView，其本质都是使用Request对象向jsp传递数据。
+(3)@RequestParam注解，下面方法的注解用于将页面传递过来的ids参数赋值给我们自己声明的id参数，required=true表示请求必须带ids这个参数，否则不能访问
+	@RequestMapping("/itemEdit.action")
+	public ModelAndView getItemById(@RequestParam(value="ids",required=true) Integer id) {
+		...
+	}
+	如果用@RequestParam注解的参数是int基本类型，但是required=false，这时如果不传参数值会报错，因为不传值，会赋值为null给int，参数异常。
+(4)使用pojo接收表单数据，要求pojo对象中的属性名和表单中input的name属性一致。
+	@RequestMapping("/updateitem.action")
+	public String updateItemById(Items items) {
+		itemService.updateItem(items);
+		return "success";
+	}
+	注意：提交的表单中不要有日期类型的数据，否则会报400错误。如果想提交日期类型的数据需要用到后面7的自定义参数绑定的内容。
+	
+
+4、解决post乱码问题，在web.xml中加入如下代码
+	<filter>
+		<filter-name>characterEncoding</filter-name>
+		<filter-class>org.springframework.web.filter.CharacterEncodingFilter</filter-class>
+		<init-param>
+			<param-name>encoding</param-name>
+			<param-value>utf-8</param-value>
+		</init-param>
+	</filter>
+	<filter-mapping>
+		<filter-name>characterEncoding</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
+5、get请求中文参数出现乱码解决方法
+(1)修改tomcat配置文件/conf/server.xml添加编码与工程编码一致，如下：
+	<Connector URIEncoding="utf-8" connectionTimeout="20000" port="8080" protocol="HTTP/1.1" redirectPort="8443"/>
+(2)对参数进行重新编码(ISO8859-1是tomcat默认编码，需要将tomcat编码后的内容按utf-8编码)：
+	String userName =new String(request.getParamter("userName").getBytes("ISO8859-1"),"utf-8")
+	
+6、传递包装对象参数
+(1)pojo包装对象QueryVo，里面有一个items对象属性
+	public class QueryVo {
+		private Items items;
+		public Items getItems() {
+			return items;
+		}
+		public void setItems(Items items) {
+			this.items = items;
+	}
+(2)页面定义格式
+	<input type="text" name="items.name" />
+(3)Controller方法定义如下：
+	public String useraddsubmit(Model model,QueryVo queryVo){
+		...
+	}
+	
+7、自定义参数绑定解决日期格式传递错误的问题
+(1)使用这个必须确保在springmvc.xml中配置有注解：<mvc:annotation-driven />
+(2)在对应的pojo的日期属性上面打上注解：
+	@DateTimeFormat(pattern="yyyy-MM-dd HH:mm:ss")
+    private Date createtime;
+(3)自定义转换类(String为页面传递过来的日期数据类型，Date为pojo中的日期数据类型)
+	public class CustomDateConverter implements Converter<String, Date> {
+		@Override
+		public Date convert(String source) {
+			try {
+				SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+				Date date = format.parse(source);
+				return date;
+			} catch (ParseException e) {
+				e.printStackTrace();
+			}
+			return null;
+		}
+	}
+(4)在springmvc.xml中配置自定义日期转换器
+	<!-- 如果使用自定义的日期转换器，还有使用了注解，优先自定义的转换器 -->
+	<mvc:annotation-driven conversion-service="conversionService"/>
+	<bean id="conversionService" class="org.springframework.format.support.FormattingConversionServiceFactoryBean">
+		<property name="converters">
+			<set>
+				<bean class="com.ssm.controller.CustomDateConverter"></bean>
+			</set>
+		</property>
+	</bean>
+	
+	
+8、Springmvc与Struts2的区别:
+(1)springmvc的入口是一个servlet即前端控制器，而struts2入口是一个filter过虑器。
+(2)springmvc是基于方法开发(一个url对应一个方法)，请求参数传递到方法的形参，
+   可以设计为单例或多例(建议单例)，struts2是基于类开发，传递参数是通过类的属性，只能设计为多例。
+(3)Struts采用值栈存储请求和响应的数据，通过OGNL存取数据， springmvc通过参数解析器是将request请求内容解析，并给方法形参赋值，
+   将数据和视图封装成ModelAndView对象，最后又将ModelAndView中的模型数据通过reques域传输到页面。Jsp视图解析器默认使用jstl。
