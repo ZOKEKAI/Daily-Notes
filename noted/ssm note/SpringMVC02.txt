@@ -1,0 +1,393 @@
+1、QueryVo包装类接收前端页面传递的数组(或者使用参数：String[] ids 接收)
+	<1>pojo类QueryVo新增一个数组属性
+		private Integer[] ids;
+		public Integer[] getIds() {
+			return ids;
+		}
+		public void setIds(Integer[] ids) {
+			this.ids = ids;
+		}
+	<2>JSP页面传递参数
+		<c:forEach items="${itemList }" var="item">
+			<tr>
+				<td><input type="checkbox"  name="ids" value="${item.id }"></td>
+			</tr>
+		</c:forEach>
+	<3>Controller部分接收参数
+		@RequestMapping("/queryitem.action")
+		public String queryitem(QueryVo vo) {
+			for (Integer integer : vo.getIds()) {
+				System.out.println(integer);
+			}
+			return "success";
+		}
+2、QueryVo包装类接收前端页面传递的List对象集合，使用包装类，不能直接在controller声明集合来接收
+	<1>pojo类QueryVo新增一个List集合属性
+		private List<Items> items ;
+		public List<Items> getItems() {
+			return items;
+		}
+		public void setItems(List<Items> items) {
+			this.items = items;
+		}
+	<2>JSP页面传递参数
+		<c:forEach items="${itemList }" var="item" varStatus="status">
+			<input type="text" name="items[${status.index}].name" value="${item.name }" /> </td>
+			<td><input type="text" name="items[${status.index}].price" value="${item.price }" /></td>
+			</tr>
+		</c:forEach>
+	<3>Controller部分接收参数
+		@RequestMapping("/queryitem")
+		public String queryItem(QueryVo queryVo) {
+			...
+		}
+3、@RequestMapping的其他用法
+(1)在controller类上使用@RequestMapping("/item")注解后访问时要在路径上添加/item字段
+(2)在方法上使用@RequestMapping(method = RequestMethod.GET)后该方法只能接收get方式的请求
+
+4、void返回值情况下使用原始方式各种方式返回页面
+(1)使用request转向页面，如下：
+	request.getRequestDispatcher("页面路径").forward(request, response)，如果不是void可以使用return"forward:/editItem.action";
+(2)也可以通过response页面重定向：
+	response.sendRedirect("url")，如果不是void可以使用return "redirect:/queryItem.action"
+(3)也可以通过response指定响应结果，例如响应json数据如下：
+	response.setCharacterEncoding("utf-8");
+	response.setContentType("application/json;charset=utf-8");
+	response.getWriter().write("json串");
+
+5、自定义异常处理器
+	系统的dao、service、controller出现异常都通过throws Exception向上抛出，最后由springmvc前端控制器交由异常处理器进行异常处理。
+(1)在com.ssm.exception包下新建一个CustomException类继承Exception，在里面新增get方式用于取得发生预期的异常时的异常信息
+	public class CustomException extends Exception {
+		private String message;//用于存储异常信息
+		public CustomException(){
+			
+		}
+		public CustomException(String message){
+			this.message=message;
+		}	
+		public String getMessage() {
+			return message;
+		}
+		public void setMessage(String message) {
+			this.message = message;
+		}
+	}
+(2)在com.ssm.exception包下新建一个全局自定义异常处理类GlobalExceptionResolver，用于处理程序发生的所有异常，要求实现HandlerExceptionResolver接口
+	public class GlobalExceptionResolver implements HandlerExceptionResolver {
+		@Override
+		public ModelAndView resolveException(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+			String message = "";
+			if(ex instanceof CustomException){
+				//1.判断是否为预期的异常  如果是则获取该异常信息 
+				CustomException customException = (CustomException)ex;
+				message =customException.getMessage();
+			}else{
+				//2.如果是运行时的异常，打印错误日志，输出异常信息到日志文件
+				ex.printStackTrace();
+				StringWriter stringWriter = new StringWriter();
+				PrintWriter s = new PrintWriter(stringWriter);
+				ex.printStackTrace(s );
+				System.out.println("输出日志："+stringWriter.toString());
+				//2.2 通知 开发人员（发短信，发送邮件）
+				System.out.println("通过开发人员");
+				//2.3 给用户一个友好的提示：您的网络有异常，请您重试！
+				message = "您的网络有异常，请您重试";
+			}
+			//3.返回一个页面（包括模型和视图）
+			ModelAndView mView = new ModelAndView();
+			mView.addObject("message", message);
+			mView.setViewName("error");
+			return mView;
+		}
+	}
+(3)在springmvc.xml中配置异常处理类
+	<!-- 配置全局异常处理器 -->
+	<bean id="handlerExceptionResolver" class="com.ssm.exception.GlobalExceptionResolver"></bean>
+(4)在对应的controller类中的itemEdit方法修改为如下内容，当输入的id不存在时抛出预期异常，如果编写该方法时有异常则继续往上抛出
+	@RequestMapping("/itemEdit.action")
+	public ModelAndView getItemById(@RequestParam(value="ids",required=true) Integer id) throws CustomException {
+		Items item = itemService.getItemById(id);
+		if(item == null){
+			throw new CustomException("商品信息不存在!");
+		}
+		ModelAndView mv = new ModelAndView();
+		mv.addObject("item", item);
+		mv.setViewName("editItem");
+		return mv;
+	}
+	
+6、使用SpringMVC上传图片
+(1)设置tomcat虚拟路径
+(2)导入commons-fileupload-1.2.2.jar和commons-io-2.4.jar这两个jar包
+(3)在springmvc.xml中配置文件上传的解析器
+	<!-- id:multipartResolver  id必须是这个值不能随意改 -->
+	<bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+		<!-- 设置上传文件的最大尺寸为5MB -->
+		<property name="maxUploadSize">
+			<value>5242880</value>
+		</property>
+		<property name="defaultEncoding" value="utf-8"></property>
+	</bean>
+(4)在controller中新增对应的文件上传方法
+	@RequestMapping("/updateitem")
+	public String updateItem(Items item,MultipartFile pictureFile) throws Exception{
+		//1.生成唯一的文件名  uuid
+		String string = UUID.randomUUID().toString();
+		//2.获取原文件的扩展名
+		String originalFilename = pictureFile.getOriginalFilename();//包括后缀abc.jpg
+		String extName=	originalFilename.substring(originalFilename.lastIndexOf("."));//带点的扩张名
+		//3.传输文件到指定的目录
+		pictureFile.transferTo(new File("G:\\temp\\"+string+extName));
+		//4.设置商品的图片的路径 就是图片的文件名加上扩展名存储就行了。
+		item.setPic(string+extName);
+		//5.更新
+		itemService.updateItem(item);
+		return "redirect:/item/itemList.action";
+	}
+(5)JSP页面部分,form表单必须加上这个属性：enctype="multipart/form-data"，并且上传文件的name属性值必须与controller中接收的参数值pictureFile一致
+	<tr>
+		<td>商品图片</td>
+		<td>
+			<input type="hidden" name="pic" value="${item.pic }"/>
+			<c:if test="${item.pic !=null}">
+				<img src="/pic/${item.pic}" width=100 height=100/>
+				<br/>
+			</c:if>
+			<input type="file"  name="pictureFile"/> 
+		</td>
+	</tr>
+	
+7、Springmvc使用json数据交互
+(1)首先导入jackson-annotations-2.4.0.jar、jackson-core-2.4.2.jar以及jackson-databind-2.4.2.jar这三个jar包
+(2)确保在springmvc.xml文件中已经配置<mvc:annotation-driven />
+(3)编写controller对应的方法用于接收页面传递过来的参数
+	//方法参数@RequestBody Items items表示从页面接收json数据并将其转成items这个java对象
+	//返回值@ResponseBody Items表示将java对象items转成json再返回给页面
+	@RequestMapping("/sendjson")
+	public @ResponseBody Items getJson(@RequestBody Items items){
+		return items;
+	}
+(4)itemList.jsp页面添加如下内容
+	<html>
+	<head>
+		<script type="text/javascript" src="${pageContext.request.contextPath }/js/jquery-1.6.4.js"></script>
+		<script type="text/javascript">
+			function sendjson(){
+				$.ajax({
+					   type: "POST",
+					   url: "${pageContext.request.contextPath }/sendjson.action",
+					   contentType:"application/json;charset=utf-8",
+					   data: '{"id":1,"name":"测试"}',
+					   success: function(data){
+							alert(data.id+">>"+data.name);
+					   }
+				});
+			}
+		</script>
+	</head>
+	<body> 
+		<button onclick="sendjson()">sendjson</button>
+	</body> 
+	</html>
+	
+8、增加RESTful风格支持
+(1)web.xml配置文件内容的拦截规则改为"/"，修改如下
+	<!-- 配置前端控制器 -->
+	<servlet>
+		<servlet-name>springmvc</servlet-name>
+		<servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+		<!-- 加载配置文件 -->
+		<init-param>
+			<param-name>contextConfigLocation</param-name>
+			<param-value>classpath:spring/springmvc.xml</param-value>
+		</init-param>
+	</servlet>
+	<!-- 配置URL拦截形式 -->
+	<servlet-mapping>
+		<servlet-name>springmvc</servlet-name>
+		<url-pattern>/</url-pattern>
+	</servlet-mapping>
+(2)JSP页面请求路径改为(不再使用"ids="这种形式)：<a href="${pageContext.request.contextPath }/itemEdit/${item.id}">修改</a>
+(3)controller部分修改为如下内容
+	//@PathVariable注解里面的值必须和"/itemEdit/{ids}"中{ids}的ids一样，框架会自动将{ids}这个占位符的值赋值给参数Integer id
+	//如果"/itemEdit/{id}"中{id}的id和参数Integer id变量名称一致，@PathVariable则可以不用指定名称。
+	@RequestMapping("/itemEdit/{ids}")
+	public ModelAndView getItemById(@PathVariable(value="ids") Integer id) throws CustomException {
+		Items item = itemService.getItemById(id);
+		
+		if(item == null){
+			throw new CustomException("商品信息不存在!");
+		}
+		
+		ModelAndView mv = new ModelAndView();
+		mv.addObject("item", item);
+		mv.setViewName("editItem");
+		return mv;
+	}
+
+9、使用<mvc:resources>实现静态资源访问
+	如果在DispatcherServlet中设置url-pattern为 "/" 则必须对静态资源进行访问处理。
+	spring mvc 的<mvc:resources mapping="" location="">实现对静态资源进行映射访问。
+	如下是对js文件访问配置：
+	<mvc:resources location="/js/" mapping="/js/**"/>
+
+10、拦截器的使用
+(1)新建com.ssm.interceptor包结构，并新建两个拦截器对象，均实现HandlerInterceptor接口
+	<1>拦截器1
+		public class Interceptor1 implements HandlerInterceptor {
+			//该方法 是在返回了modelandiew 返回给页面之前执行
+			//主要用于清理资源  异常处理
+			@Override
+			public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception arg3)
+					throws Exception {
+				System.out.println("Interceptor1------------afterCompletion------");
+
+			}
+			//改方法在进入目标方法之后，返回modelanview之前执行
+			//应用在公用的变量要使用的时候就可以在这里赋值。
+			@Override
+			public void postHandle(HttpServletRequest arg0, HttpServletResponse arg1, Object arg2, ModelAndView modelanview)
+					throws Exception {
+				System.out.println("Interceptor1------------postHandle------");
+				//设置公用的变量
+			}
+			//该方法在 目标方法执行之前 先执行。应用在权限控制，用户的身份认证
+			//return false:表示 要拦截请求  不让其执行目标方法
+			//return true:表示放行 让其执行目标方法
+			@Override
+			public boolean preHandle(HttpServletRequest arg0, HttpServletResponse arg1, Object handler) throws Exception {
+				System.out.println("Interceptor1------------preHandle------");
+				return true;
+			}
+		}
+	<2>拦截器2
+		public class Interceptor2 implements HandlerInterceptor {
+			@Override
+			public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception arg3)
+					throws Exception {
+				System.out.println("Interceptor2------------afterCompletion------");
+
+			}
+			@Override
+			public void postHandle(HttpServletRequest arg0, HttpServletResponse arg1, Object arg2, ModelAndView modelanview)
+					throws Exception {
+				System.out.println("Interceptor2------------postHandle------");
+				//设置公用的变量
+			}
+			@Override
+			public boolean preHandle(HttpServletRequest arg0, HttpServletResponse arg1, Object handler) throws Exception {
+				System.out.println("Interceptor2------------preHandle------");
+				return false;
+			}
+		}
+(2)在springmvc.xml文件中配置针对所有mapping的全局拦截器
+	<!-- 配置拦截器 -->
+	<mvc:interceptors>
+		<!-- mapping:指定要拦截的URL的地址  /**:表示所有的请求 -->
+		<!-- bean ：指定拦截器的类  ，表示要由这个类来拦截上边的请求 -->
+		<mvc:interceptor>
+			<mvc:mapping path="/**"/>
+			<bean class="com.ssm.interceptor.Interceptor1"></bean>
+		</mvc:interceptor>
+		<mvc:interceptor>
+			<mvc:mapping path="/**"/>
+			<bean class="com.ssm.interceptor.Interceptor2"></bean>
+		</mvc:interceptor>
+	</mvc:interceptors>
+(3)测试：任意访问一个controller，在控制台观察输出日志
+	<1>Interceptor1的preHandler方法返回true，Interceptor2返回true，运行流程如下：
+		Interceptor1------------preHandle------
+		Interceptor2------------preHandle------
+		Interceptor2------------postHandle------
+		Interceptor1------------postHandle------
+		Interceptor2------------afterCompletion------
+		Interceptor1------------afterCompletion------
+	<2>Interceptor1的preHandler方法返回false，Interceptor2返回true，运行流程如下：
+		Interceptor1------------preHandle------
+		从日志看出第一个拦截器的preHandler方法返回false后第一个拦截器只执行了preHandler方法，
+		其它两个方法没有执行，第二个拦截器的所有方法不执行，并且请求controller的方法的操作被拦截了
+	<3>Interceptor1的preHandler方法返回true，Interceptor2返回false，运行流程如下：
+		Interceptor1------------preHandle------
+		Interceptor2------------preHandle------
+		Interceptor1------------afterCompletion------
+		从日志看出第二个拦截器的preHandler方法返回false后第一个拦截器的postHandler没有执行，afterCompletion执行了，
+		第二个拦截器的postHandler和afterCompletion没有执行，并且请求controller的方法的操作被拦截了
+	
+	运行流程总结：
+	preHandle：按拦截器定义顺序调用
+	postHandler：按拦截器定义逆序调用
+	afterCompletion：按拦截器定义逆序调用
+
+	postHandler：只有在拦截器链内所有拦截器都返回true时才会调用
+	afterCompletion：只有当与之相对应的preHandle返回true时才会调用
+	
+	
+11、使用拦截器进行登陆之前的验证
+
+(1)在com.ssm.interceptor包下面新建一个用户登陆拦截器LoginInterceptor用于对用户登陆请求进行处理
+	public class LoginInterceptor implements HandlerInterceptor {
+		@Override
+		public void afterCompletion(HttpServletRequest arg0, HttpServletResponse arg1, Object arg2, Exception arg3) throws Exception {
+		}
+		@Override
+		public void postHandle(HttpServletRequest arg0, HttpServletResponse arg1, Object arg2, ModelAndView arg3) throws Exception {
+		}
+		
+		@Override
+		public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+			//身份认证在这里进行
+			//判断如果是登录的页面的URL 或者是 执行登录业务逻辑的URL 就不拦截，直接放行，让其进入controller的登陆方法或者登陆页面
+			if(request.getRequestURL().toString().contains("Login")){
+				return true;
+			}
+			
+			//1.获取session，判断session中是否有用户的信息 如果没有说明用户还未登陆，拦截该请求，并且重定向到登录的页面
+			Object object = request.getSession().getAttribute("USER_INFO");
+			if(object==null){
+				response.sendRedirect(request.getContextPath()+"/user/showLogin");
+				return false;
+			}
+			//3.如果有值，说明用户已经登陆，放行该请求，让用户进入其想要访问的页面
+			return true;
+		}
+	}
+(2)在springmvc.xml文件中添加如下的拦截器配置
+	<!-- 配置拦截器 -->
+	<mvc:interceptors>
+		<!-- mapping:指定要拦截的URL的地址  /**:表示所有的请求 -->
+		<!-- bean ：指定拦截器的类  ，表示要由这个类来拦截上边的请求 -->
+		<mvc:interceptor>
+			<mvc:mapping path="/**"/>
+			<bean class="com.ssm.interceptor.LoginInterceptor"></bean>
+		</mvc:interceptor>
+	</mvc:interceptors>
+
+(3)在处理登陆的controller里面创建一个转跳到登陆页面的方法，用于处理访问登陆页面的请求
+	//展示登录的页面
+	@RequestMapping("/user/showLogin")
+	public String showLogin(){
+		return "login";
+	}
+(4)登陆页面
+	<form action="${pageContext.request.contextPath }/user/Login" method="post">
+		<table>
+			<tr><td>用户名：<input type="text" name="username"><td/></tr>
+			<tr><td>密码：<input type="password" name="password"><td/></tr>
+			<tr><td><input type="submit" value="提交"><td/></tr>
+		</table>
+	</form>
+(5)在处理登陆的controller里面创建一个登陆方法
+	//接收登陆的页面传递的用户名和密码做登录处理
+	@RequestMapping("/user/Login")
+	public String login(String username,String password,HttpSession session){
+		//1.判断用户名和密码是否正确  是应该调用service 从数据库中查询
+		if("admin".equals(username) && "admin".equals(password)){
+			//登录成功   需要 将用户的信息存储到session 中
+			session.setAttribute("USER_INFO", "admin");
+			//重定向到首页（商品列表页面）
+			return "redirect:/itemList.action";
+		}
+		//2.如果没有登录成功  重定向登录的页面
+		return "redirect:/user/showLogin";
+	}
