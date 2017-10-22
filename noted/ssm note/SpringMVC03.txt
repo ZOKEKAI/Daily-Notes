@@ -1,0 +1,278 @@
+1、封装QueryVo进行分页条件查询
+(1)在com.crm.pojo包里面新建一个QueryVo，用于封装页面传递过来的查询条件以及分页信息
+	public class QueryVo {
+		private String custName;
+		private String custSource;
+		private String custIndustry;
+		private String custLevel;
+		private Integer page;
+		private Integer rows;
+		//用于分页查询语句
+		private Integer start;
+		...
+	}
+(2)客户表与字典表联合查询语句如下(示例)
+	SELECT 
+	  cust_id,
+	  cust_name,
+	  b.dict_item_name cust_source,
+	  d.dict_item_name cust_industry,
+	  e.dict_item_name cust_level,
+	  cust_phone,
+	  cust_mobile  
+	FROM customer c 
+	  LEFT JOIN base_dict b ON c.cust_source=b.dict_id
+	  LEFT JOIN base_dict d ON c.cust_industry=d.dict_id
+	  LEFT JOIN base_dict e ON c.cust_level=e.dict_id
+	WHERE
+	  cust_name LIKE '%马%'
+	  AND cust_source=6
+	  AND cust_industry=2
+	  AND cust_level=22
+	limit 1,10
+(3)由上面的查询结果可知，需要新建一个pojo类Customer，用于封装查询结果
+	public class Customer {
+		private Long cust_id;
+		private String cust_name;
+		private Long cust_user_id;
+		private Long cust_create_id;
+		private String cust_source;
+		private String cust_industry;
+		private String cust_level;
+		private String cust_linkman;
+		private String cust_phone;
+		private String cust_mobile;
+		private String cust_zipcode;
+		private String cust_address;
+		private Date cust_createtime;
+		...
+	}
+(4)在service层使用前端页面传递过来的数据以及从数据库查询到的数据封装成页面需要的Page分页对象
+	public Page<Customer> getCustomListByQueryVo(QueryVo vo) {
+		if (vo.getPage()==null) vo.setPage(1);
+		if (vo.getRows()==null) vo.setRows(10);
+		//设置分页数据，用于分页查询
+		vo.setStart((vo.getPage()-1)*vo.getRows());
+		//接下来封装分页对象
+		Page<Customer> page = new Page<>();
+		page.setTotal(mapper.getCount(vo));
+		page.setPage(vo.getPage());
+		page.setSize(vo.getRows());
+		page.setRows(mapper.getCustomListByQueryVo(vo));
+		
+		return page;
+	}
+(5)在mapper包下面新建一个CustomerMapper接口以及映射文件
+	<1>CustomerMapper接口
+	public interface CustomerMapper {
+		List<Customer> getCustomListByQueryVo(QueryVo vo);
+		Integer getCount(QueryVo vo);
+	}
+	<2>CustomerMapper映射文件
+	<select id="getCustomListByQueryVo" parameterType="com.crm.pojo.QueryVo" resultType="com.crm.pojo.Customer">
+		SELECT 
+		  cust_id,
+		  cust_name,
+		  b.dict_item_name cust_source,
+		  d.dict_item_name cust_industry,
+		  e.dict_item_name cust_level,
+		  cust_phone,
+		  cust_mobile  
+		FROM customer c 
+		  LEFT JOIN base_dict b ON c.cust_source=b.dict_id
+		  LEFT JOIN base_dict d ON c.cust_industry=d.dict_id
+		  LEFT JOIN base_dict e ON c.cust_level=e.dict_id
+		<where>
+			<if test="custName!=null and custName!=''">
+				AND	cust_name LIKE '%${custName}%'
+			</if>
+			<if test="custSource!=null and custSource!=''">
+				AND cust_source = #{custSource}
+			</if>
+			<if test="custIndustry!=null and custIndustry!=''">
+				AND cust_industry = #{custIndustry}
+			</if>
+			<if test="custLevel!=null and custLevel!=''">
+				AND cust_level = #{custLevel}
+			</if>
+		</where>
+		  limit #{start},#{rows}
+	</select>
+	
+	<select id="getCount" parameterType="com.crm.pojo.QueryVo" resultType="int">
+		SELECT 
+		  count(*)  
+		FROM customer c 
+		  LEFT JOIN base_dict b ON c.cust_source=b.dict_id
+		  LEFT JOIN base_dict d ON c.cust_industry=d.dict_id
+		  LEFT JOIN base_dict e ON c.cust_level=e.dict_id
+		<where>
+			<if test="custName!=null and custName!=''">
+				AND	cust_name LIKE '%${custName}%'
+			</if>
+			<if test="custSource!=null and custSource!=''">
+				AND cust_source = #{custSource}
+			</if>
+			<if test="custIndustry!=null and custIndustry!=''">
+				AND cust_industry = #{custIndustry}
+			</if>
+			<if test="custLevel!=null and custLevel!=''">
+				AND cust_level = #{custLevel}
+			</if>
+		</where>
+	</select>
+	
+	或者使用sql片段的方式，简少重复的sql语句
+	<sql id="where_case_sql_customer">
+		<where>
+			<if test="custName!=null and custName!=''">
+				AND	cust_name LIKE '%${custName}%'
+			</if>
+			<if test="custSource!=null and custSource!=''">
+				AND cust_source = #{custSource}
+			
+			</if>
+			<if test="custIndustry!=null and custIndustry!=''">
+			
+				AND cust_industry = #{custIndustry}
+			</if>
+			<if test="custLevel!=null and custLevel!=''">
+				AND cust_level = #{custLevel}
+			</if>
+		</where>
+	</sql>
+	
+	<select id="getCustomList" parameterType="com.itheima.crm.pojo.QueryVo" resultType="com.itheima.crm.pojo.Customer">
+		SELECT
+			c.cust_id,
+			c.cust_name,
+			a.dict_item_name as cust_source,
+			b.dict_item_name as cust_industry,
+			d.dict_item_name as cust_level,
+			c.cust_phone,
+			c.cust_mobile
+		FROM
+			customer c
+		LEFT JOIN base_dict a ON c.cust_source = a.dict_id
+		LEFT JOIN base_dict b ON c.cust_industry = b.dict_id
+		LEFT JOIN base_dict d ON c.cust_level = d.dict_id
+		<include refid="where_case_sql_customer"/>
+		
+		limit #{start},#{rows}
+	</select>
+	
+	<select id="getCount" parameterType="com.itheima.crm.pojo.QueryVo" resultType="int">
+		SELECT
+			count(1)
+		FROM
+			customer c
+		LEFT JOIN base_dict a ON c.cust_source = a.dict_id
+		LEFT JOIN base_dict b ON c.cust_industry = b.dict_id
+		LEFT JOIN base_dict d ON c.cust_level = d.dict_id
+		<include refid="where_case_sql_customer"/>
+	</select>
+(6)解决输入内容点击搜索时中文传递到后台乱码的问题，这里使用更改tomcat配置文件的方式
+	在tomcat的conf/server.xml中设置：
+	<Connector URIEncoding="UTF-8" connectionTimeout="20000" port="8080" protocol="HTTP/1.1" redirectPort="8443"/>
+
+2、回显某一客户的信息关键代码
+	<1>页面部分
+	<script type="text/javascript">
+		function editCustomer(id) {
+			$.ajax({
+				type:"get",
+				url:"<%=basePath%>customer/edit.action",
+				data:{"id":id}, //jquery 自动将json对象转成id=1&name=12312313
+				success:function(data) {
+					//data:json
+					$("#edit_cust_id").val(data.cust_id);
+					$("#edit_customerName").val(data.cust_name);
+					$("#edit_customerFrom").val(data.cust_source)
+					$("#edit_custIndustry").val(data.cust_industry)
+					$("#edit_custLevel").val(data.cust_level)
+					$("#edit_linkMan").val(data.cust_linkman);
+					$("#edit_phone").val(data.cust_phone);
+					$("#edit_mobile").val(data.cust_mobile);
+					$("#edit_zipcode").val(data.cust_zipcode);
+					$("#edit_address").val(data.cust_address);
+					
+				}
+			});
+		}
+	</script>
+	<2>Controller部分
+	@RequestMapping(value="/customer/edit",method=RequestMethod.GET)
+	@ResponseBody //将customer转换为json对象
+	public Customer getCustomerById(Long id){
+		Customer customer = customerService.getCustomerById(id);
+		return customer;
+	}
+	
+3、更新用户数据关键代码
+	<1>页面部分
+	function updateCustomer() {
+		//$("#edit_customer_form").serialize():表单序列化成功，直接使用ajax提交表单的方式，而不用一个一个传值再提交
+		$.post("<%=basePath%>customer/update.action",$("#edit_customer_form").serialize(),function(data){
+			window.location.reload();
+		});
+	}
+	<2>Controller部分
+	//produces=MediaType.APPLICATION_JSON_UTF8_VALUE:指定响应的content-type为指定的格式。
+	@RequestMapping(value="/customer/update",method=RequestMethod.POST,produces=MediaType.APPLICATION_JSON_UTF8_VALUE)
+	@ResponseBody
+	//@responseBody 如果修饰的返回值得类型是类 （对象） 那么默认的content-type:就是applicatioin/json;
+	//如果是修饰的是String 默认返回的content-type:text/plain; 
+	public String updateCustomer(Customer customer){
+		coustomerservice.updateCustomer(customer);
+		//"\":表示转义符  把“ 作为字符返回
+		return "{\"id\":123}";
+	}
+	<3>映射文件部分，使用set标签处理多个set值的问题
+	<update id="updateCustomer" parameterType="com.crm.pojo.Customer">
+		update customer
+		<set>
+			<if test="cust_name!=null">
+				cust_name=#{cust_name},
+			</if>
+			<if test="cust_user_id!=null">
+				cust_user_id=#{cust_user_id},
+			</if>
+			<if test="cust_create_id!=null">
+				cust_create_id=#{cust_create_id},
+			</if>
+			<if test="cust_source!=null">
+				cust_source=#{cust_source},
+			</if>
+			<if test="cust_industry!=null">
+				cust_industry=#{cust_industry},
+			</if>
+			<if test="cust_level!=null">
+				cust_level=#{cust_level},
+			</if>
+			<if test="cust_linkman!=null">
+				cust_linkman=#{cust_linkman},
+			</if>
+			<if test="cust_phone!=null">
+				cust_phone=#{cust_phone},
+			</if>
+			<if test="cust_mobile!=null">
+				cust_mobile=#{cust_mobile},
+			</if>
+			<if test="cust_zipcode!=null">
+				cust_zipcode=#{cust_zipcode},
+			</if>
+			<if test="cust_address!=null">
+				cust_address=#{cust_address},
+			</if>
+			<if test="cust_createtime!=null">
+				cust_createtime=#{cust_createtime},
+			</if>
+		</set>
+		WHERE cust_id=#{cust_id}
+	</update>
+	
+4、Spring父子容器问题
+	Spring可以比作父类，而SpringMVC则为子类，他们相互的访问权限跟继承一样，
+所以不能在springmvc容器里面管理controoler包以外的原本属于Spring容器管理的对象，
+也就是不能在springmvc.xml中将包扫描配置为如下这个样子(不能交由springmvc容器去管理)：
+	<context:component-scan base-package="com.crm" />
