@@ -182,7 +182,7 @@ Field类的几个方法：
 
 (1)导入IKAnalyzer的jar包并BuildPath
 
-(2)在项目下(不是src下面)面创建config文件夹，文件夹类型为Source Folder
+(2)在项目下(不是src下面)创建config文件夹，文件夹类型为Source Folder
 
 (3)将 mydict.dic、IKAnalyzer.cfg.xml、ext_stopword.dic 这3个文件拷贝到config文件夹
 <1>mydict.dic：扩展词典文件，在该文件里面添加自定义的分词词组后分词时就会按照我们自定义的方式来分词
