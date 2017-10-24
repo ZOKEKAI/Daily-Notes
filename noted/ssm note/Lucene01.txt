@@ -1,0 +1,227 @@
+1、理解全文检索(数据来源：数据库方式)
+
+(1)全文检索是什么：先建立索引，再对索引进行搜索的过程。
+
+(2)为什么需要全文检索：在网页搜索时，如果没有全文检索，每一次检索数据都会对数据库进行查询，
+当数据库的数据量非常大时，搜索起来非常耗时以及耗费资源，所以我们可以先将数据库的数据采集出来，
+提前对这些数据进行整理，建立索引，将这些索引文件存储到服务器的硬盘上，当用户进行数据搜索时，
+直接从我们建立好的索引库查找结果，不仅避免了多次查询数据库的性能问题，而且还能加快搜索速度。
+
+(3)为什么全文检索的速度快:传统方法是先找到文件，再找内容，如何在文件中找内容，在文件内容中匹配搜索关键字，
+这种方法是顺序扫描方法，数据量大时搜索非常慢。而全文检索使用的是倒排索引结构，是根据内容(分好的词)找文档，
+倒排索引结构也叫反向索引结构，包括索引和文档两部分，索引即词汇表，它是在索引中匹配搜索关键字，由于索引内容量
+有限并且采用固定优化算法搜索速度很快，找到了索引中的词汇，词汇与文档关联，从而最终找到了文档。
+
+(4)分词的作用：分词就是将采集到的文档内容切分成一个一个的词，具体应该说是将Document中Field的value值切分成一个一个的词。
+切分好后按照 Field的name:切分的词 这种结构建立好索引，搜索时根据Field的name确定范围，再根据分词查找到相应的建立好的索引，
+分词目的为了建立索引。
+
+(5)为什么要建立索引：索引的目的为了加快搜索，之所以能加快搜索那是因为索引使用的是倒排索引结构。
+
+是否分词(tokenized)：
+	分词目的为了建立索引，ID、身份证号、订单号这些不需要分词，因为他是一个整体，所以将整个作为一个串存储在索引中，
+通常使用Field类的StringField方法进行构建，而商品名称以及商品详情这些需要进行分词，因为搜索时会按照这些关键字来搜索，搜索的前提是已经建立好索引，
+而分词就是为了建立索引，通常使用TextField方法进行构建。
+
+是否索引(indexed)：
+	索引的目的为了搜索，根据搜索时会按照哪些关键字来搜索从而确定该字段是否需要索引，例如商品名称以及商品详情都需要索引。
+
+是否存储(stored)：
+	存储的目的是为了展示搜索结果，也就是点击搜索后出来的页面，这个页面一般只显示一些商品名称以及商品价格和商品图片等，
+进行到这一步并没有对数据库进行查询，但是要确保搜索结果显示正常，所以上面提到的名称、价格以及图片这些参数均需要存储到建立好索引关系的文档中，
+如果需要查看某一商品的详情，再根据该商品ID从数据库查询出来并展示在详情页面，由此处可知，ID也需要存储，无论有没有显示，查询时使用到了ID。
+
+Field类的几个方法：
+(1)StringField(FieldName, FieldValue,Store.YES/Store.NO))：不分词、索引、存储或不存储。将整个串存储在索引中，比如(订单号,身份证号等)
+(2)LongField(FieldName, FieldValue,Store.YES/Store.NO) | FloatField(FieldName, FieldValue,Store.YES/Store.NO)：
+	分词、索引、存储或不存储。用来构建一个Long/Float的数字型Field，进行分词和索引，比如(价格)，是否存储在文档中用Store.YES或Store.NO决定
+(3)StoredField(FieldName, FieldValue)：不分词、不索引、存储。用来构建不同类型的Field，比如(图片路径)
+(4)TextField(FieldName, FieldValue, Store.YES/Store.NO) | TextField(FieldName, reader)：
+	分词、索引、存储或不存储。用来构建内容比较多的Field，比如(商品描述)，lucene默认采用不存储的策略
+
+2、全文检索代码
+	public class LuceneFirst {
+	
+		@Test	//创建索引的流程
+		public void createIndex() throws IOException {
+			//1.采集数据
+			BookDao dao = new BookDaoImpl();
+			List<Book> bookList = dao.queryBookList();
+			
+			Document document =null;
+			List<Document> documents = new ArrayList<>();
+			
+			for (Book book : bookList) {
+				//2.构建文档对象document
+				document = new Document();
+				//2.1构建field域
+				//参数1：表示域的名称 一般使用字段名称，可以是任意的。
+				//参数2：域所对应的存储的值
+				//参数3：表示是否存储:YES     YES NO  .存储不存储要看页面展示不展示。
+				Field fieldid = new StringField("id", book.getId().toString(), Store.YES);//不分词  要索引  要存储
+				Field fieldname = new TextField("name", book.getName(), Store.YES);//分词 索引 存储
+				Field fieldprice = new FloatField("price", book.getPrice(), Store.YES);//分词 索引 存储
+				Field fieldpic = new StoredField("pic", book.getPic());//不分词 不 索引    要 存储
+				Field fielddesc = new TextField("description", book.getDescription(), Store.NO);//分词 索引 不存储
+				
+				//2.2添加域到文档对象中
+				document.add(fieldid);
+				document.add(fieldname);
+				document.add(fieldprice);
+				document.add(fieldpic);
+				document.add(fielddesc);
+				
+				//将该文档对象添加到list集合中
+				documents.add(document);
+			}
+			
+			//3.分析文档（分门别类的存放） 分析器（分词器）
+			Analyzer analyzer = new StandardAnalyzer();//标准分词器
+			
+			//4.创建索引
+			//4.1指定索引库的位置  有两种方式(FS： 存储在磁盘   RAM：存储在内存中)，一般使用存储在磁盘中
+			FSDirectory directory = FSDirectory.open(new File("F:\\index"));
+			
+			//4.2配置并且创建流writer对象 IndexWriter，用于写出索引
+			IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_4_10_3, analyzer);
+			IndexWriter writer = new IndexWriter(directory, config );
+			
+			//4.3 将文档对象添加到索引库中(写出索引)
+			writer.addDocuments(documents);
+			
+			//关流
+			writer.close();
+		}
+		
+		
+		@Test	//搜索的流程
+		public void searchIndex() throws IOException {
+			//1.构建查询对象  （封装了查询的语法以及要查询的内容）
+			//term中的参数 1：要搜索的域的名称 2：要搜索的内容
+			TermQuery termQuery = new TermQuery(new Term("name", "java"));
+			
+			//2.创建FSDirectory对象，用于指定搜索的索引库的位置
+			FSDirectory directory = FSDirectory.open(new File("F:\\index"));
+			
+			//3.创建流indexReader，传入上面配置好的FSDirectory对象
+			IndexReader reader = DirectoryReader.open(directory);
+			
+			//4.创建搜索器IndexSearcher，传入上面创建的IndexReader对象，IndexSearcher提供了很多的搜索的方法
+			IndexSearcher searcher = new IndexSearcher(reader);
+			
+			//5.使用搜索器IndexSearcher的对象searcher执行搜索，搜索的对象是我们建立好的索引域(相当于目录)
+			//参数1：查询的对象（封装了查询的语法和条件）
+			//参数2：表示查询 排名靠前的最多前1000条记录
+			TopDocs topDocs = searcher.search(termQuery, 1000);
+			
+			//获取从索引域中查询到的结果集，并且在下面遍历该结果集
+			ScoreDoc[] scoreDocs = topDocs.scoreDocs;
+			
+			//scoreDocs数组里面的每一个scoreDoc均包含有:打的分数、文档的ID等，文档的ID从0开始
+			for (ScoreDoc scoreDoc : scoreDocs) {
+				//取出文档的ID
+				int docId = scoreDoc.doc;
+				//通过搜索索引域查找到的文档ID再从文档域中获取到真实的文档对象(每个索引域中的索引已和对应的文档域中的文档对象建立好连接)
+				Document document = searcher.doc(docId);
+				//通过文档域的名称获取该文档域中的值
+				System.out.println(document.get("id"));
+				System.out.println(document.get("name"));
+				System.out.println(document.get("pic"));
+			}
+		}
+		
+		
+		@Test	// 删除索引
+		public void deleteIndex() throws Exception {
+			// 1、指定索引库目录
+			Directory directory = FSDirectory.open(new File("F:\\index"));
+			// 2、创建IndexWriterConfig
+			IndexWriterConfig cfg = new IndexWriterConfig(Version.LATEST,new StandardAnalyzer());
+			// 3、创建IndexWriter
+			IndexWriter writer = new IndexWriter(directory, cfg);
+			
+			//4、根据Term来删除符合该条件的索引，删除后这些索引的位置会空出来，后面的索引不会自动往前移动
+			writer.deleteDocuments(new Term("filename", "apache"));
+			
+			//删除全部索引(慎用，因为lucene3.x之后的版本没有回收站功能)
+			/*writer.deleteAll();*/
+			
+			// 5、关闭IndexWriter
+			writer.close();
+		}
+		
+		
+		@Test	// 更新索引
+		public void updateIndex() throws Exception {
+			
+			Analyzer analyzer = new StandardAnalyzer();//标准分词器
+			
+			//1.指定索引库的位置
+			FSDirectory directory = FSDirectory.open(new File("F:\\index"));
+			
+			//2.创建流indexWrtier
+			IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_4_10_3, analyzer);
+			IndexWriter writer = new IndexWriter(directory, config );
+			
+			//3.构建一个更新后的文档对象
+			Document documentupdate = new Document();
+			Field fieldname = new TextField("name", "update no document", Store.YES);
+			documentupdate.add(fieldname);
+			//4.调用方法执行更新
+			//参数1：表示要搜索的查询到的文档
+			//参数2：更新后文档对象
+			//就是：先查询name上查找内容为lucene的文档，把更新成更新后的文档
+			writer.updateDocument(new Term("name","lucene"), documentupdate);
+			
+			//5.关闭流
+			writer.close();
+		}
+	}
+	
+3、IKAnalyzer中文分词器的使用(切记：建立索引和搜素要使用同一个分词器)
+
+(1)导入IKAnalyzer的jar包并BuildPath
+
+(2)在项目下(不是src下面)面创建config文件夹，文件夹类型为Source Folder
+
+(3)将 mydict.dic、IKAnalyzer.cfg.xml、ext_stopword.dic 这3个文件拷贝到config文件夹
+<1>mydict.dic：扩展词典文件，在该文件里面添加自定义的分词词组后分词时就会按照我们自定义的方式来分词
+	例如：向mydict.dic文件添加 "我是谁" 这个词组后在对 "我是谁" 进行分词时会增加(原有基础上)一个 "我是谁" 这个分词结果，而使用标准分词器没有自定义分词时分词结果为 "我" "是" "谁" ，不会生成 "我是谁" 这个词组
+<2>ext_stopword.dic：停用词词典文件，在该文件里面添加自定义的停用词词组后在分词时自动屏蔽该停用词
+	例如：向ext_stopword.dic添加 "我是谁" 这个词组后在对 "我是谁" 进行分词时会屏蔽 "我是谁" 这个词组，也就是说分词结果只有 "我" "是" "谁" 这三个结果，即使mydict.dic文件中有 "我是谁" 这个自定义词组也不行
+注意：修改这两个文件时不要使用Windows自带的记事本来修改，因为修改后需要保存为UTF-8编码的文档，而用记事本保存后编码为有bom的UTF-8,推荐使用eclipse自带的编辑器或者Notepad++编辑
+	
+(4)编辑IKAnalyzer.cfg.xml文件，内容根据实际情况修改
+	<properties>  
+		<comment>IK Analyzer 扩展配置</comment>
+		<!--用户可以在这里配置自己的扩展字典--> 
+		<entry key="ext_dict">mydict.dic;</entry> 
+		 
+		<!--用户可以在这里配置自己的扩展停止词字典-->
+		<entry key="ext_stopwords">ext_stopword.dic;</entry> 
+	</properties>
+	
+(5)测试分词的效果(实际情况是直接对采集到的数据进行分词，这里只是测试，了解即可)
+	public void testAnalyzer() throws IOException{
+		//1.创建analyzer (ik)
+		Analyzer analyzer = new IKAnalyzer();
+		//2.获取tokenstream  (分的词都在此对象中)
+		//第一个参数：就是域的名称，可以不写或者""
+		//第二个参数：分析的词内容
+		TokenStream tokenStream = analyzer.tokenStream("", "我是谁");
+		//3.指定一个引用   （指定 词的引用   或者 偏移量）
+		CharTermAttribute addAttribute = tokenStream.addAttribute(CharTermAttribute.class);
+		//4.设置一个偏移量的引用
+		OffsetAttribute offsetAttribute = tokenStream.addAttribute(OffsetAttribute.class);
+		//5.调用tokenstream的rest方法 重置
+		tokenStream.reset();
+		//6.通过wihle 循环 遍历单词列表
+		while(tokenStream.incrementToken()){
+			///打印
+			System.out.println("start>>"+offsetAttribute.startOffset());
+			System.out.println(addAttribute.toString());//打印单词
+			System.out.println("end>>"+offsetAttribute.endOffset());
+		}
+		//关闭流
+		tokenStream.close();		
+	}
