@@ -1,0 +1,283 @@
+启动和关闭
+
+1、进入目录
+cd /usr/local/redis-cluster
+
+2、在/usr/local/redis-cluster/redis01..06/bin里面如果有以下这些文件则需先删除
+dump.rdb、nodes.conf、aof文件
+
+3、启动集群
+./redis-cluster-start-all.sh
+
+4、配置集群
+./redis-trib.rb create --replicas 1 192.168.253.132:7001 192.168.253.132:7002 192.168.253.132:7003 192.168.253.132:7004 192.168.253.132:7005  192.168.253.132:7006
+
+5、关闭集群
+./redis-cluster-stop-all.sh
+
+
+
+编码使用
+
+1、在taotao-content-service中的pom.xml文件中导入坐标
+	<!-- Redis客户端 -->
+	<dependency>
+		<groupId>redis.clients</groupId>
+		<artifactId>jedis</artifactId>
+	</dependency>
+
+2、在taotao-content-service的com.taotao.content.jedis包下面新建jedis接口以及他的单机版和集群版实现类
+单机版用于开发环境，集群版用于生产环境，具体使用哪个可在spring配置文件中控制。
+(1)JedisClient接口
+	public interface JedisClient {
+
+		String set(String key, String value);
+		String get(String key);
+		Boolean exists(String key);
+		Long expire(String key, int seconds);
+		Long ttl(String key);
+		Long incr(String key);
+		Long hset(String key, String field, String value);
+		String hget(String key, String field);	
+		Long hdel(String key,String... field);//删除hkey
+		
+	}
+(2)单机版实现类
+	public class JedisClientPool implements JedisClient {
+	
+		@Autowired
+		private JedisPool jedisPool;
+
+		@Override
+		public String set(String key, String value) {
+			Jedis jedis = jedisPool.getResource();
+			String result = jedis.set(key, value);
+			jedis.close();
+			return result;
+		}
+
+		@Override
+		public String get(String key) {
+			Jedis jedis = jedisPool.getResource();
+			String result = jedis.get(key);
+			jedis.close();
+			return result;
+		}
+
+		@Override
+		public Boolean exists(String key) {
+			Jedis jedis = jedisPool.getResource();
+			Boolean result = jedis.exists(key);
+			jedis.close();
+			return result;
+		}
+
+		@Override
+		public Long expire(String key, int seconds) {
+			Jedis jedis = jedisPool.getResource();
+			Long result = jedis.expire(key, seconds);
+			jedis.close();
+			return result;
+		}
+
+		@Override
+		public Long ttl(String key) {
+			Jedis jedis = jedisPool.getResource();
+			Long result = jedis.ttl(key);
+			jedis.close();
+			return result;
+		}
+
+		@Override
+		public Long incr(String key) {
+			Jedis jedis = jedisPool.getResource();
+			Long result = jedis.incr(key);
+			jedis.close();
+			return result;
+		}
+
+		@Override
+		public Long hset(String key, String field, String value) {
+			Jedis jedis = jedisPool.getResource();
+			Long result = jedis.hset(key, field, value);
+			jedis.close();
+			return result;
+		}
+
+		@Override
+		public String hget(String key, String field) {
+			Jedis jedis = jedisPool.getResource();
+			String result = jedis.hget(key, field);
+			jedis.close();
+			return result;
+		}
+
+		@Override
+		public Long hdel(String key, String... field) {
+			Jedis jedis = jedisPool.getResource();
+			Long hdel = jedis.hdel(key, field);
+			jedis.close();
+			return hdel;
+		}	
+
+	}
+(3)集群版实现类
+	public class JedisClientCluster implements JedisClient {
+		
+		@Autowired
+		private JedisCluster jedisCluster;
+
+		@Override
+		public String set(String key, String value) {
+			return jedisCluster.set(key, value);
+		}
+
+		@Override
+		public String get(String key) {
+			return jedisCluster.get(key);
+		}
+
+		@Override
+		public Boolean exists(String key) {
+			return jedisCluster.exists(key);
+		}
+
+		@Override
+		public Long expire(String key, int seconds) {
+			return jedisCluster.expire(key, seconds);
+		}
+
+		@Override
+		public Long ttl(String key) {
+			return jedisCluster.ttl(key);
+		}
+
+		@Override
+		public Long incr(String key) {
+			return jedisCluster.incr(key);
+		}
+
+		@Override
+		public Long hset(String key, String field, String value) {
+			return jedisCluster.hset(key, field, value);
+		}
+
+		@Override
+		public String hget(String key, String field) {
+			return jedisCluster.hget(key, field);
+		}
+
+		@Override
+		public Long hdel(String key, String... field) {
+			// TODO Auto-generated method stub
+			return jedisCluster.hdel(key, field);
+		}
+
+	}
+	
+3、在taotao-content-service中的spring资源文件夹下面新增applicationContext-redis.xml文件，配置如下：
+
+	<!-- 配置单机版，单机版和集群版不能共存，使用单机版时注释集群版的配置。使用集群版，把单机版注释 -->
+	<!-- <bean class="redis.clients.jedis.JedisPool" id="jedisPool">
+		<constructor-arg name="host" value="192.168.253.132"></constructor-arg>
+		<constructor-arg name="port" value="6379"></constructor-arg>
+	</bean>
+	<bean class="com.taotao.content.jedis.JedisClientPool"></bean> -->
+	
+	<!-- 配置集群版 -->
+	<bean class="redis.clients.jedis.JedisCluster" id="jedisCluster">
+		<constructor-arg name="nodes">
+			<set>
+				<bean class="redis.clients.jedis.HostAndPort">
+					<constructor-arg name="host" value="192.168.253.132"></constructor-arg>
+					<constructor-arg name="port" value="7001"></constructor-arg>
+				</bean>
+				<bean class="redis.clients.jedis.HostAndPort">
+					<constructor-arg name="host" value="192.168.253.132"></constructor-arg>
+					<constructor-arg name="port" value="7002"></constructor-arg>
+				</bean>
+				<bean class="redis.clients.jedis.HostAndPort">
+					<constructor-arg name="host" value="192.168.253.132"></constructor-arg>
+					<constructor-arg name="port" value="7003"></constructor-arg>
+				</bean>
+				<bean class="redis.clients.jedis.HostAndPort">
+					<constructor-arg name="host" value="192.168.253.132"></constructor-arg>
+					<constructor-arg name="port" value="7004"></constructor-arg>
+				</bean>
+				<bean class="redis.clients.jedis.HostAndPort">
+					<constructor-arg name="host" value="192.168.253.132"></constructor-arg>
+					<constructor-arg name="port" value="7005"></constructor-arg>
+				</bean>
+				<bean class="redis.clients.jedis.HostAndPort">
+					<constructor-arg name="host" value="192.168.253.132"></constructor-arg>
+					<constructor-arg name="port" value="7006"></constructor-arg>
+				</bean>
+			</set>
+		</constructor-arg>
+	</bean>
+	<bean class="com.taotao.content.jedis.JedisClientCluster"></bean>
+	
+4、将taotao-content-service中com.taotao.content.service.impl包下面的ContentServiceImpl实现类修改为如下代码：
+	
+	public class ContentServiceImpl implements ContentService {
+	
+		@Autowired
+		private TbContentMapper mapper;
+		
+		//使用接口声明，好处在于不用更改代码只需在xml配置文件里面修改即可切换单机版或者集群版客户端
+		@Autowired	
+		private JedisClient jedisclient;
+		
+		@Override	//redis集群缓存数据库数据
+		public List<TbContent> getContentListByCategoryId(Long categoryId) {
+			
+			//注意：添加缓存 不能影响的正常的业务逻辑
+
+			//判断 是否有缓存 ，如果有，直接返回缓存中的数据到页面
+			
+			try {
+				String stringjson = jedisclient.hget("CONTENT_KEY_REDIS", categoryId+"");
+				if(StringUtils.isNotBlank(stringjson)){
+					//不为空，说明找到缓存数据
+					List<TbContent> list = JsonUtils.jsonToList(stringjson, TbContent.class);
+					return list;
+				}
+			} catch (Exception e1) {
+				e1.printStackTrace();
+			}
+			
+			//创建example 设置查询的条件
+			TbContentExample example = new TbContentExample();
+			//执行查询
+			example.createCriteria().andCategoryIdEqualTo(categoryId);
+			
+			List<TbContent> list = mapper.selectByExample(example);
+			
+			//添加（写入）缓存到redis数据库中
+			try {
+				jedisclient.hset("CONTENT_KEY_REDIS", categoryId+"",JsonUtils.objectToJson(list));
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			
+			return list;
+		}
+		
+		@Override	//redis集群与数据库数据同步
+		public TaotaoResult saveContent(TbContent content) {
+		
+			//当内容被修改后根据Id值清空redis集群里面该类型的所有内容缓存，再次搜索时从数据库查询数据，并将更新后的数据缓存到redis集群
+			try {
+				jedisclient.hdel("CONTENT_KEY_REDIS", content.getCategoryId()+"");
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			
+			//补全属性 
+			content.setCreated(new Date());
+			content.setUpdated(content.getCreated());
+			//插入
+			mapper.insertSelective(content);
+			return TaotaoResult.ok();
+		}
+	}
