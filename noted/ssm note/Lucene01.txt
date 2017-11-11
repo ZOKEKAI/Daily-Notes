@@ -225,3 +225,120 @@ Field类的几个方法：
 		//关闭流
 		tokenStream.close();		
 	}
+	
+
+4、Lucene高级查询
+
+	public class QueryTest {	
+	
+		//query的子类查询
+		//查询所有的文档
+		
+		@Test
+		public void testMatchAllDocsQuery() throws Exception{
+			Query query = new MatchAllDocsQuery();
+			doSearchBy(query);
+		}
+
+		private void doSearchBy(Query query) throws IOException {
+			
+			//2.指定索引库的位置
+			FSDirectory directory = FSDirectory.open(new File("G:\\index"));
+			//3.创建indexReader 
+			IndexReader reader = DirectoryReader.open(directory);
+			//4.创建搜索器（INdexSearcher）
+			IndexSearcher searcher = new IndexSearcher(reader);
+			//5.执行搜索
+			TopDocs topDocs = searcher.search(query, 100);
+			//6.获取查询的结果
+			System.out.println("查询命中的数量"+topDocs.totalHits);
+			
+			//7.遍历查询的结果
+			ScoreDoc[] scoreDocs = topDocs.scoreDocs;
+			
+			for (ScoreDoc scoreDoc : scoreDocs) {
+				int doc = scoreDoc.doc;
+				Document document = searcher.doc(doc);
+				System.out.println(document.get("id"));
+				System.out.println(document.get("name"));
+			}
+			//8.关闭流
+			reader.close();
+		}
+		
+		//根据项查询 name:lucene
+		//term：作为整体来匹配查询的。项精确查询？？？
+		@Test
+		public void testTermQuery() throws Exception{
+			Query query = new TermQuery(new Term("name","lucene"));
+			doSearchBy(query);
+		}
+		
+		//数值范围内的查询
+		@Test
+		public void testNumericRangeQuery() throws Exception{
+			//参数1：域的名称
+			//参数2：最小值
+			//参数3：最大值
+			//参数4：是否包含最小值  true    最小值=<xx
+			//参数5：是否包含最大值   false   xx<最大值
+			Query query = NumericRangeQuery.newFloatRange("price", 55f, 70f, true, false);
+			doSearchBy(query);
+		}
+		
+		//多条件组合查询   booleanquery
+		@Test
+		public void testBooleanQuery() throws Exception{
+			//1.创建查询的子条件1
+			Query query1 = new TermQuery(new Term("name","lucene"));
+			//2.创建查询的字条件2
+			//Query query2 = NumericRangeQuery.newFloatRange("price", 55f, 60f, true, false);
+			
+			Query query2 = new TermQuery(new Term("name","spring"));
+			
+			//3.创建boolenquery
+			BooleanQuery query = new BooleanQuery();
+			//4.封装两个子条件到boolenquery
+			//参数1：要封装的查询的条件
+			//参数2：
+			//MUST :必须 ，必须满足该条件。相当于数据库中 AND
+			
+			//SHOULD:应该，相当于数据库中的OR
+			
+			//MUST_NOT：必须不 ，相当于书库中 NOT
+			
+			query.add(query1, Occur.MUST_NOT);
+			query.add(query2, Occur.SHOULD);
+			//5.执行查询
+			doSearchBy(query);
+		}
+		
+		//使用queryparser来实现查询
+		@Test
+		public void testQueryParser() throws Exception{
+			Analyzer anlyzer = new IKAnalyzer();
+			//1.创建queryparser对象
+			//参数1：指定默认的搜索域  field名称
+			//参数2：指定分词器
+			QueryParser queryParser = new QueryParser("name", anlyzer );
+			//2.解析queryprser 成一个query子类
+			Query query = queryParser.parse("name:lucene and name:spring");
+			//3.执行查询
+			doSearchBy(query);
+		}
+		
+		//多域值搜索
+		@Test
+		public void testMultiFieldQueryParser() throws Exception{
+			Analyzer anlyzer = new IKAnalyzer();
+			String[] fields = new String[]{"name","description"};
+			//1.创建queryparser对象
+			//参数：指定默认的搜索域数组 表示指定多个默认的搜索域 以并集的方式查询
+			MultiFieldQueryParser parser = new MultiFieldQueryParser(fields , anlyzer);
+			
+			Query query = parser.parse("java");
+			
+			//3.执行查询
+			doSearchBy(query);
+		}
+	}
