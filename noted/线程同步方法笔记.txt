@@ -26,3 +26,5 @@ c.µ±Thread1 µ÷ÓÃobj1.staticMethod01£¨£©Ê±£¬Thread2²»¹ÜÊÇµ÷ÓÃobj1.staticMe01£¨£©»
 Í¬²½´úÂë¿é¸úÍ¬²½·½·¨µÄÒìÍ¬£º
 1.Í¬²½·½·¨ÊÇÖ¸¶ÔÕû¸ö·½·¨½øÐÐ¼ÓËøÍ¬²½£¬¶øÍ¬²½¿éÊÇÖ¸¶Ô·½·¨ÄÚµÄÄ³¸ö´úÂë¿é½øÐÐ¼ÓËøÍ¬²½¡£
 2.Í¬²½·½·¨µÄËøÓÃµÄÊÇÆäÊµÀý¶ÔÏó±¾Éí£¬¶øÍ¬²½´úÂë¿éµÄËø¿ÉÒÔ×Ô¼ºÖ¸¶¨¡£
+
+»îËø£¬Ö¸ÊÂÎï1¿ÉÒÔÊ¹ÓÃ×ÊÔ´£¬µ«ËüÈÃÆäËûÊÂÎïÏÈÊ¹ÓÃ×ÊÔ´£»ÊÂÎï2¿ÉÒÔÊ¹ÓÃ×ÊÔ´£¬µ«ËüÒ²ÈÃÆäËûÊÂÎïÏÈÊ¹ÓÃ×ÊÔ´£¬ÓÚÊÇÁ½ÕßÒ»Ö±Ç«ÈÃ£¬¶¼ÎÞ·¨Ê¹ÓÃ×ÊÔ´¡£
