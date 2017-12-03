@@ -66,7 +66,7 @@
 
 2、使用POI实现区域数据导出为Excel文件
 页面路径：bos_managment_web/src/main/webapp/pages/base/area.html
-需要用到的工具类：MailUtils
+需要用到的工具类：FileUtils
 (1)工具栏上添加导出按钮，以及设置响应函数
 	{
 		id : 'button-export',
